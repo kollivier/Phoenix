@@ -5,7 +5,7 @@
 #
 # Created:     25-Aug-2011
 # Copyright:   (c) 2011 by Wide Open Technologies
-# Copyright:   (c) 2011-2017 by Total Control Software
+# Copyright:   (c) 2011-2020 by Total Control Software
 # License:     wxWindows License
 #---------------------------------------------------------------------------
 
@@ -54,6 +54,7 @@ def run():
     addTransferAnnotations(c, 'menuItem')
     addTransferAnnotations(c, 'subMenu')
     c.find('AppendSubMenu.submenu').transfer = True
+    c.find('Insert.submenu').transfer = True
 
     # We only need one of these overloads, the non-const/const is not enough
     # to distinguish a unique Python signature.
@@ -155,7 +156,7 @@ def run():
         GetMenus() -> (menu, label)\n
         Return a list of (menu, label) items for the menus in the :class:`MenuBar`.""",
         body="""\
-        return [(self.GetMenu(i), self.GetLabelTop(i)) for i in range(self.GetMenuCount())]
+        return [(self.GetMenu(i), self.GetMenuLabel(i)) for i in range(self.GetMenuCount())]
         """)
     c.addPyMethod('SetMenus', '(self, items)',
         doc="""\
@@ -169,6 +170,10 @@ def run():
         """)
     c.addPyProperty('Menus GetMenus SetMenus')
 
+
+    # deprecated and removed
+    c.find('GetLabelTop').ignore()
+    c.find('SetLabelTop').ignore()
 
     module.addItem(tools.wxListWrapperTemplate('wxMenuList', 'wxMenu', module))
 

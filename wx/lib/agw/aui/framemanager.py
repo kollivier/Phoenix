@@ -98,7 +98,11 @@ __date__ = "31 March 2009"
 
 import wx
 # just for isinstance
-import time
+from time import time
+try:
+    from time import perf_counter
+except ImportError:  # clock is removed in py3.8
+    from time import clock as perf_counter
 import warnings
 
 import six
@@ -125,12 +129,10 @@ if wx.Platform == "__WXMSW__":
     except ImportError:
         pass
 
-# wxPython version string
-_VERSION_STRING = wx.VERSION_STRING
-
 # AUI Events
 wxEVT_AUI_PANE_BUTTON = wx.NewEventType()
 wxEVT_AUI_PANE_CLOSE = wx.NewEventType()
+wxEVT_AUI_PANE_CLOSED = wx.NewEventType()
 wxEVT_AUI_PANE_MAXIMIZE = wx.NewEventType()
 wxEVT_AUI_PANE_RESTORE = wx.NewEventType()
 wxEVT_AUI_RENDER = wx.NewEventType()
@@ -147,6 +149,8 @@ wxEVT_AUI_PERSPECTIVE_CHANGED = wx.NewEventType()
 EVT_AUI_PANE_BUTTON = wx.PyEventBinder(wxEVT_AUI_PANE_BUTTON, 0)
 """ Fires an event when the user left-clicks on a pane button. """
 EVT_AUI_PANE_CLOSE = wx.PyEventBinder(wxEVT_AUI_PANE_CLOSE, 0)
+""" A pane in `AuiManager` is about to be closed. """
+EVT_AUI_PANE_CLOSED = wx.PyEventBinder(wxEVT_AUI_PANE_CLOSED, 0)
 """ A pane in `AuiManager` has been closed. """
 EVT_AUI_PANE_MAXIMIZE = wx.PyEventBinder(wxEVT_AUI_PANE_MAXIMIZE, 0)
 """ A pane in `AuiManager` has been maximized. """
@@ -603,7 +607,7 @@ class AuiPaneInfo(object):
         :note: A pane structure is valid if it has an associated window.
         """
 
-        return self.window != None
+        return self.window is not None
 
 
     def IsMaximized(self):
@@ -2263,9 +2267,9 @@ class AuiSingleDockingGuide(AuiDockingGuide):
             else:
                 self.SetGuideShape()
 
-            self.SetSize(self.region.GetBox().GetSize())
+            self.SetClientSize(self.region.GetBox().GetSize())
         else:
-            self.SetSize((sizeX, sizeY))
+            self.SetClientSize((sizeX, sizeY))
 
         self.rect = wx.Rect(0, 0, sizeX, sizeY)
 
@@ -2414,7 +2418,7 @@ class AuiCenterDockingGuide(AuiDockingGuide):
         else:
             self.SetGuideShape()
 
-        self.SetSize(self.region.GetBox().GetSize())
+        self.SetClientSize(self.region.GetBox().GetSize())
 
         self.Bind(wx.EVT_ERASE_BACKGROUND, self.OnEraseBackground)
         self.Bind(wx.EVT_PAINT, self.OnPaint)
@@ -2724,6 +2728,8 @@ class AuiDockingHintWindow(wx.Frame):
         self._art = parent.GetEventHandler().GetArtProvider()
         background = self._art.GetColour(AUI_DOCKART_HINT_WINDOW_COLOUR)
         self.SetBackgroundColour(background)
+        border = self._art.GetColour(AUI_DOCKART_HINT_WINDOW_BORDER_COLOUR)
+        self._border_pen = wx.Pen(border, 5)
 
         # Can't set background colour on a frame on wxMac
         # so add a panel to set the colour on.
@@ -2746,17 +2752,22 @@ class AuiDockingHintWindow(wx.Frame):
         """
 
         amount = 128
-        size = self.GetClientSize()
-        region = wx.Region(0, 0, size.x, 1)
+        size_x, size_y = self.GetClientSize()
+        region = wx.Region(0, 0, size_x, 1)
 
-        for y in range(size.y):
-
-            # Reverse the order of the bottom 4 bits
-            j = (y & 8 and [1] or [0])[0] | (y & 4 and [2] or [0])[0] | \
-                (y & 2 and [4] or [0])[0] | (y & 1 and [8] or [0])[0]
-
-            if 16*j+8 < amount:
-                region.Union(0, y, size.x, 1)
+        ## for y in range(size_y):
+        ##
+        ##     # Reverse the order of the bottom 4 bits
+        ##     j = (y & 8 and [1] or [0])[0] | (y & 4 and [2] or [0])[0] | \
+        ##         (y & 2 and [4] or [0])[0] | (y & 1 and [8] or [0])[0]
+        ##
+        ##     if 16*j+8 < amount:
+        ##         region.Union(0, y, size_x, 1)
+        region_Union = region.Union  # local opt
+        [region_Union(0, y, size_x, 1) for y in range(size_y)
+            if 16 * ((y & 8 and [1] or [0])[0] | (y & 4 and [2] or [0])[0] |
+                     (y & 2 and [4] or [0])[0] | (y & 1 and [8] or [0])[0])
+                     + 8 < amount]
 
         self.SetShape(region)
 
@@ -2810,6 +2821,8 @@ class AuiDockingHintWindow(wx.Frame):
         """
 
         background = self._art.GetColour(AUI_DOCKART_HINT_WINDOW_COLOUR)
+        border = self._art.GetColour(AUI_DOCKART_HINT_WINDOW_BORDER_COLOUR)
+        self._border_pen = wx.Pen(border, 5)
 
         if wx.Platform == '__WXMAC__':
             self.panel.SetBackgroundColour(background)
@@ -2844,13 +2857,13 @@ class AuiDockingHintWindow(wx.Frame):
         :param `event`: an instance of :class:`PaintEvent` to be processed.
         """
 
-        rect = wx.Rect(wx.Point(0, 0), self.GetSize())
+        rect = wx.Rect((0, 0), self.GetSize())
 
         dc = wx.PaintDC(self)
         event.Skip()
 
         dc.SetBrush(wx.TRANSPARENT_BRUSH)
-        dc.SetPen(wx.Pen(wx.Colour(60, 60, 60), 5))
+        dc.SetPen(self._border_pen)
         rect.Deflate(1, 1)
         dc.DrawRectangle(rect)
 
@@ -3115,6 +3128,9 @@ class AuiFloatingFrame(wx.MiniFrame):
             if self._owner_mgr and self._owner_mgr._action_window == self:
                 self._owner_mgr._action_window = None
 
+            self._fly_timer.Stop()
+            self._check_fly_timer.Stop()
+
             self._mgr.UnInit()
             self.Destroy()
 
@@ -3213,12 +3229,7 @@ class AuiFloatingFrame(wx.MiniFrame):
         self._last2_rect = wx.Rect(*self._last_rect)
         self._last_rect = wx.Rect(*win_rect)
 
-        if _VERSION_STRING < "2.9":
-            leftDown = wx.GetMouseState().LeftDown()
-        else:
-            leftDown = wx.GetMouseState().LeftIsDown()
-
-        if not leftDown:
+        if not wx.GetMouseState().LeftIsDown():
             return
 
         if not self._moving:
@@ -3248,12 +3259,7 @@ class AuiFloatingFrame(wx.MiniFrame):
         """
 
         if self._moving:
-            if _VERSION_STRING < "2.9":
-                leftDown = wx.GetMouseState().LeftDown()
-            else:
-                leftDown = wx.GetMouseState().LeftIsDown()
-
-            if not leftDown:
+            if not wx.GetMouseState().LeftIsDown():
                 self._moving = False
                 self.OnMoveFinished()
             else:
@@ -3363,12 +3369,7 @@ class AuiFloatingFrame(wx.MiniFrame):
         if self._fly_timer.IsRunning():
             return
 
-        if _VERSION_STRING < "2.9":
-            leftDown = wx.GetMouseState().LeftDown()
-        else:
-            leftDown = wx.GetMouseState().LeftIsDown()
-
-        if leftDown:
+        if wx.GetMouseState().LeftIsDown():
             return
 
         rect = wx.Rect(*self.GetScreenRect())
@@ -4234,6 +4235,7 @@ class AuiManager(wx.EvtHandler):
         self.Bind(EVT_AUI_PANE_DOCKED, self.OnPaneDocked)
 
         self.Bind(auibook.EVT_AUINOTEBOOK_BEGIN_DRAG, self.OnTabBeginDrag)
+        self.Bind(auibook.EVT_AUINOTEBOOK_END_DRAG, self.OnTabEndDrag)
         self.Bind(auibook.EVT_AUINOTEBOOK_PAGE_CLOSE, self.OnTabPageClose)
         self.Bind(auibook.EVT_AUINOTEBOOK_PAGE_CHANGED, self.OnTabSelected)
 
@@ -4333,13 +4335,16 @@ class AuiManager(wx.EvtHandler):
 
         if p.IsOk():
             if p.IsNotebookPage():
-                if show:
-
-                    notebook = self._notebooks[p.notebook_id]
-                    id = notebook.GetPageIndex(p.window)
-                    if id >= 0:
-                        notebook.SetSelection(id)
+                notebook = self._notebooks[p.notebook_id]
+                page_idx = notebook.GetPageIndex(p.window)
+                if page_idx >= 0:
+                    notebook.HidePage(page_idx, not show)
+                    if show:
+                        notebook.SetSelection(page_idx)
+                if notebook.GetShownPageCount() > 0:
                     self.ShowPane(notebook, True)
+                else:
+                    self.ShowPane(notebook, False)
 
             else:
                 p.Show(show)
@@ -4599,13 +4604,13 @@ class AuiManager(wx.EvtHandler):
                     klass.RemoveEventHandler(handler)
 
 
-    def OnClose(self, ev):
+    def OnClose(self, event):
         """Called when the managed window is closed. Makes sure that :meth:`UnInit`
         is called.
         """
 
-        ev.Skip()
-        if ev.GetEventObject() == self._frame:
+        event.Skip()
+        if event.GetEventObject() == self._frame:
             wx.CallAfter(self.UnInit)
 
 
@@ -4659,7 +4664,7 @@ class AuiManager(wx.EvtHandler):
     def CanUseModernDockArt(self):
         """
         Returns whether :class:`dockart` can be used (Windows XP / Vista / 7 only,
-        requires Mark Hammonds's `pywin32 <http://sourceforge.net/projects/pywin32/>`_ package).
+        requires Mark Hammonds's `pywin32 <https://sourceforge.net/projects/pywin32/>`_ package).
         """
 
         if not _winxptheme:
@@ -4765,8 +4770,8 @@ class AuiManager(wx.EvtHandler):
 
         # if the pane's name identifier is blank, create a random string
         if pinfo.name == "" or already_exists:
-            pinfo.name = ("%s%08x%08x%08x") % (pinfo.window.GetName(), int(time.time()),
-                                               int(time.clock()), len(self._panes))
+            pinfo.name = ("%s%08x%08x%08x") % (pinfo.window.GetName(), int(time()),
+                                               int(perf_counter()), len(self._panes))
 
         # set initial proportion (if not already set)
         if pinfo.dock_proportion == 0:
@@ -5030,14 +5035,14 @@ class AuiManager(wx.EvtHandler):
         if pane_info.window and pane_info.window.IsShown():
             pane_info.window.Show(False)
 
-        # make sure that we are the parent of this window
-        if pane_info.window and pane_info.window.GetParent() != self._frame:
-            pane_info.window.Reparent(self._frame)
-
         # if we have a frame, destroy it
         if pane_info.frame:
+            # make sure that we are the parent of this window
+            if pane_info.window and pane_info.window.GetParent() != self._frame:
+                pane_info.window.Reparent(self._frame)
             pane_info.frame.Destroy()
             pane_info.frame = None
+            pane_info.Hide()
 
         elif pane_info.IsNotebookPage():
             # if we are a notebook page, remove ourselves...
@@ -5052,7 +5057,14 @@ class AuiManager(wx.EvtHandler):
                     notebook = self._notebooks[nid]
                     page_idx = notebook.GetPageIndex(pane_info.window)
                     if page_idx >= 0:
-                        notebook.RemovePage(page_idx)
+                        if not pane_info.IsDestroyOnClose():
+                            self.ShowPane(pane_info.window, False)
+
+        else:
+            if pane_info.window and pane_info.window.GetParent() != self._frame:
+                pane_info.window.Reparent(self._frame)
+            pane_info.Dock().Hide()
+
 
         # now we need to either destroy or hide the pane
         to_destroy = 0
@@ -5065,24 +5077,23 @@ class AuiManager(wx.EvtHandler):
                 if pane_info.dock_direction in [AUI_DOCK_LEFT, AUI_DOCK_RIGHT]:
                     tb.SetAGWWindowStyleFlag(tb.GetAGWWindowStyleFlag() | AUI_TB_VERTICAL)
 
-            pane_info.Dock().Hide()
-
         if pane_info.IsNotebookControl():
 
             notebook = self._notebooks[pane_info.notebook_id]
-            while notebook.GetPageCount():
-                window = notebook.GetPage(0)
-                notebook.RemovePage(0)
+            for idx in range(notebook.GetPageCount()-1, -1, -1):
+                window = notebook.GetPage(idx)
                 info = self.GetPane(window)
-                if info.IsOk():
-                    info.notebook_id = -1
-                    info.dock_direction = AUI_DOCK_NONE
-                    # Note: this could change our paneInfo reference ...
-                    self.ClosePane(info)
+                # close page if its IsDestroyOnClose flag is set
+                if info.IsDestroyOnClose():
+                    if info.IsOk():
+                        # Note: this could change our paneInfo reference ...
+                        self.ClosePane(info)
 
         if to_destroy:
             to_destroy.Destroy()
 
+        # Now inform the app that we closed a pane.
+        self.FireEvent(wxEVT_AUI_PANE_CLOSED, pane_info)
 
     def MaximizePane(self, pane_info, savesizes=True):
         """
@@ -5332,7 +5343,7 @@ class AuiManager(wx.EvtHandler):
         options = pane_part.split(";")
         for items in options:
 
-            val_name, value = items.split("=")
+            val_name, value = items.split("=", 1)
             val_name = val_name.strip()
 
             if val_name == "name":
@@ -5445,6 +5456,17 @@ class AuiManager(wx.EvtHandler):
         # mark all panes currently managed as docked and hidden
         saveCapt = {} # see restorecaption param
         for pane in self._panes:
+
+            # dock the notebook pages
+            if pane.IsNotebookPage():
+                notebook = self._notebooks[pane.notebook_id]
+                idx = notebook.GetPageIndex(pane.window)
+                notebook.RemovePage(idx)
+                pane.window.Reparent(self._frame)
+                nb = self.GetPane(notebook)
+                pane.notebook_id = -1
+                pane.Direction(nb.dock_direction)
+
             pane.Dock().Hide()
             saveCapt[pane.name] = pane.caption
 
@@ -5595,15 +5617,12 @@ class AuiManager(wx.EvtHandler):
         if action_pane == -1:
             return positions, sizes
 
-        offset = 0
         for pane_i in range(action_pane-1, -1, -1):
             amount = positions[pane_i+1] - (positions[pane_i] + sizes[pane_i])
             if amount >= 0:
-                offset += amount
+                pass
             else:
                 positions[pane_i] -= -amount
-
-            offset += sizes[pane_i]
 
         # if the dock mode is fixed, make sure none of the panes
         # overlap we will bump panes that overlap
@@ -5759,6 +5778,9 @@ class AuiManager(wx.EvtHandler):
         if spacer_only or not pane.window:
             sizer_item = vert_pane_sizer.Add((1, 1), 1, wx.EXPAND)
         else:
+            if pane.window.GetContainingSizer():
+                # Make sure that there is only one sizer to this window
+                pane.window.GetContainingSizer().Detach(pane.window);
             sizer_item = vert_pane_sizer.Add(pane.window, 1, wx.EXPAND)
             vert_pane_sizer.SetItemMinSize(pane.window, (1, 1))
 
@@ -6183,7 +6205,12 @@ class AuiManager(wx.EvtHandler):
             if not dock.fixed:
                 for jj in range(dock_pane_count):
                     pane = dock.panes[jj]
-                    pane.dock_pos = jj
+                    if pane.IsNotebookPage() and pane.notebook_id < len(self._notebooks):
+                        # update dock_pos to its index in notebook
+                        notebook = self._notebooks[pane.notebook_id]
+                        pane.dock_pos = notebook.GetPageIndex(pane.window)
+                    else:
+                        pane.dock_pos = jj
 
             # if the dock mode is fixed, and none of the panes
             # are being moved right now, make sure the panes
@@ -6379,8 +6406,6 @@ class AuiManager(wx.EvtHandler):
         if not self.GetManagedWindow():
             return
 
-        if '__WXGTK__' in wx.PlatformInfo:
-            self.GetManagedWindow().Freeze()
         self._hover_button = None
         self._action_part = None
 
@@ -6446,6 +6471,18 @@ class AuiManager(wx.EvtHandler):
             pFrame = p.frame
 
             if p.IsFloating():
+                if p.IsToolbar():
+                    bar = p.window
+                    if isinstance(bar, auibar.AuiToolBar):
+                        bar.SetGripperVisible(False)
+                        agwStyle = bar.GetAGWWindowStyleFlag()
+                        bar.SetAGWWindowStyleFlag(agwStyle & ~AUI_TB_VERTICAL)
+                        bar.Realize()
+
+                    s = p.window.GetMinSize()
+                    p.BestSize(s)
+                    p.FloatingSize(wx.DefaultSize)
+
                 if pFrame is None:
                     # we need to create a frame for this
                     # pane, which has recently been floated
@@ -6457,18 +6494,6 @@ class AuiManager(wx.EvtHandler):
                     if self._action in [actionDragFloatingPane, actionDragToolbarPane] and \
                        self._agwFlags & AUI_MGR_TRANSPARENT_DRAG:
                         frame.SetTransparent(150)
-
-                    if p.IsToolbar():
-                        bar = p.window
-                        if isinstance(bar, auibar.AuiToolBar):
-                            bar.SetGripperVisible(False)
-                            agwStyle = bar.GetAGWWindowStyleFlag()
-                            bar.SetAGWWindowStyleFlag(agwStyle & ~AUI_TB_VERTICAL)
-                            bar.Realize()
-
-                        s = p.window.GetMinSize()
-                        p.BestSize(s)
-                        p.FloatingSize(wx.DefaultSize)
 
                     frame.SetPaneWindow(p)
                     p.needsTransparency = True
@@ -6505,7 +6530,7 @@ class AuiManager(wx.EvtHandler):
             else:
 
                 if p.IsToolbar():
-#                    self.SwitchToolBarOrientation(p)
+                    self.SwitchToolBarOrientation(p)
                     p.best_size = p.window.GetBestSize()
 
                 if p.window and not p.IsNotebookPage() and p.window.IsShown() != p.IsShown():
@@ -6559,8 +6584,6 @@ class AuiManager(wx.EvtHandler):
         if not self._masterManager:
             e = self.FireEvent(wxEVT_AUI_PERSPECTIVE_CHANGED, None, canVeto=False)
 
-        if '__WXGTK__' in wx.PlatformInfo:
-            self.GetManagedWindow().Thaw()
 
 
     def UpdateNotebook(self):
@@ -6601,12 +6624,14 @@ class AuiManager(wx.EvtHandler):
                     window.Reparent(self._frame)
                     pageCounter -= 1
                     allPages -= 1
+                    paneInfo.Direction(self.GetPane(notebook).dock_direction)
 
                 pageCounter += 1
 
             notebook.DoSizing()
 
         # Add notebook pages that aren't there already...
+        pages_and_panes = {}
         for paneInfo in self._panes:
             if paneInfo.IsNotebookPage():
 
@@ -6617,8 +6642,9 @@ class AuiManager(wx.EvtHandler):
 
                 if page_id < 0:
 
-                    paneInfo.window.Reparent(notebook)
-                    notebook.AddPage(paneInfo.window, title, True, paneInfo.icon)
+                    if paneInfo.notebook_id not in pages_and_panes:
+                        pages_and_panes[paneInfo.notebook_id] = []
+                    pages_and_panes[paneInfo.notebook_id].append(paneInfo)
 
                 # Update title and icon ...
                 else:
@@ -6631,6 +6657,16 @@ class AuiManager(wx.EvtHandler):
             # Wire-up newly created notebooks
             elif paneInfo.IsNotebookControl() and not paneInfo.window:
                 paneInfo.window = self._notebooks[paneInfo.notebook_id]
+
+        for notebook_id, pnp in six.iteritems(pages_and_panes):
+            # sort the panes with dock_pos
+            sorted_pnp = sorted(pnp, key=lambda pane: pane.dock_pos)
+            notebook = self._notebooks[notebook_id]
+            for pane in sorted_pnp:
+                title = (pane.caption == "" and [pane.name] or [pane.caption])[0]
+                pane.window.Reparent(notebook)
+                notebook.AddPage(pane.window, title, True, pane.icon)
+            notebook.DoSizing()
 
         # Delete empty notebooks, and convert notebooks with 1 page to
         # normal panes...
@@ -6647,6 +6683,7 @@ class AuiManager(wx.EvtHandler):
                 if child_pane.IsOk() and notebook_pane.IsOk():
 
                     child_pane.SetDockPos(notebook_pane)
+                    child_pane.Show(notebook_pane.IsShown())
                     child_pane.window.Hide()
                     child_pane.window.Reparent(self._frame)
                     child_pane.frame = None
@@ -6670,39 +6707,7 @@ class AuiManager(wx.EvtHandler):
 
             else:
 
-                # Correct page ordering. The original wxPython code
-                # for this did not work properly, and would misplace
-                # windows causing errors.
-                notebook.Freeze()
                 self._notebooks[nb_idx] = notebook
-                pages = notebook.GetPageCount()
-                selected = notebook.GetPage(notebook.GetSelection())
-
-                # Take each page out of the notebook, group it with
-                # its current pane, and sort the list by pane.dock_pos
-                # order
-                pages_and_panes = []
-                for idx in reversed(list(range(pages))):
-                    page = notebook.GetPage(idx)
-                    pane = self.GetPane(page)
-                    pages_and_panes.append((page, pane))
-                    notebook.RemovePage(idx)
-                sorted_pnp = sorted(pages_and_panes, key=lambda tup: tup[1].dock_pos)
-
-                # Grab the attributes from the panes which are ordered
-                # correctly, and copy those attributes to the original
-                # panes. (This avoids having to change the ordering
-                # of self._panes) Then, add the page back into the notebook
-                sorted_attributes = [self.GetAttributes(tup[1])
-                                     for tup in sorted_pnp]
-                for attrs, tup in zip(sorted_attributes, pages_and_panes):
-                    pane = tup[1]
-                    self.SetAttributes(pane, attrs)
-                    notebook.AddPage(pane.window, pane.caption)
-
-                notebook.SetSelection(notebook.GetPageIndex(selected), True)
-                notebook.DoSizing()
-                notebook.Thaw()
 
                 # It's a keeper.
                 remap_ids[nb] = nb_idx
@@ -7415,6 +7420,18 @@ class AuiManager(wx.EvtHandler):
                 # not our window
                 event.Skip()
 
+    def OnTabEndDrag(self, event):
+        """
+        Handles the ``EVT_AUINOTEBOOK_END_DRAG`` event.
+
+        :param `event`: a :class:`~wx.lib.agw.aui.auibook.AuiNotebookEvent` event to be processed.
+        """
+
+        if self._masterManager:
+            self._masterManager.OnTabEndDrag(event)
+        else:
+            self.Update()
+            event.Skip()
 
     def OnTabPageClose(self, event):
         """
@@ -7447,7 +7464,7 @@ class AuiManager(wx.EvtHandler):
                 # Close/update asynchronously, because
                 # the notebook which generated the event
                 # (and triggered this method call) will
-                # be deleted. 
+                # be deleted.
                 def close():
                     self.ClosePane(p)
                     self.Update()
@@ -8235,12 +8252,7 @@ class AuiManager(wx.EvtHandler):
 
         if part.rect.Contains(pt):
 
-            if _VERSION_STRING < "2.9":
-                leftDown = wx.GetMouseState().LeftDown()
-            else:
-                leftDown = wx.GetMouseState().LeftIsDown()
-
-            if leftDown:
+            if wx.GetMouseState().LeftIsDown():
                 state = AUI_BUTTON_STATE_PRESSED
             else:
                 state = AUI_BUTTON_STATE_HOVER
@@ -8757,7 +8769,10 @@ class AuiManager(wx.EvtHandler):
         # has been specified, use it, otherwise
         # make a client dc
         if dc is None:
-            client_dc = wx.ClientDC(self._frame)
+            if not self._frame.IsDoubleBuffered():
+                client_dc = wx.BufferedDC(wx.ClientDC(self._frame), wx.Size(w, h))
+            else:
+                client_dc = wx.ClientDC(self._frame)
             dc = client_dc
 
         # If the frame has a toolbar, the client area
@@ -9877,7 +9892,7 @@ class AuiManager(wx.EvtHandler):
         # is the pane dockable?
         if self.CanDockPanel(pane):
             # do the drop calculation
-            ret, pane = self.DoDrop(self._docks, self._panes, pane, clientPt, self._action_offset)
+            ret, pane = self.DoDrop(self._docks, self._panes, pane, clientPt, self._toolbar_action_offset)
 
         # update floating position
         if pane.IsFloating():
@@ -9904,12 +9919,7 @@ class AuiManager(wx.EvtHandler):
         # when release the button out of the window.
         # TODO: a better fix is needed.
 
-        if _VERSION_STRING < "2.9":
-            leftDown = wx.GetMouseState().LeftDown()
-        else:
-            leftDown = wx.GetMouseState().LeftIsDown()
-
-        if not leftDown:
+        if not wx.GetMouseState().LeftIsDown():
             self._action = actionNone
             self.OnLeftUp_DragToolbarPane(eventOrPt)
 
@@ -10751,6 +10761,7 @@ class AuiManager_DCP(AuiManager):
         else:
             # if we get here, there's no center pane, create our dummy
             if not self.hasDummyPane:
-                self._createDummyPane()
-
-
+                def do():
+                    self._createDummyPane()
+                    self.Update()
+                wx.CallAfter(do)

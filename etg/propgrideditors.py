@@ -3,7 +3,7 @@
 # Author:      Robin Dunn
 #
 # Created:     23-Feb-2015
-# Copyright:   (c) 2015-2017 by Total Control Software
+# Copyright:   (c) 2015-2020 by Total Control Software
 # License:     wxWindows License
 #---------------------------------------------------------------------------
 
@@ -49,18 +49,23 @@ def run():
     m = c.find('GetValueFromControl')
     m.find('variant').out = True
 
-    # Change the virtual method handler code to follow the same pattern as the
-    # tweaked public API, namely that the value is the return value instead of
-    # an out parameter.
+    # Change the virtual method handler code for GetValueFromControl to follow
+    # the same pattern as the tweaked public API, namely that the value is the
+    # return value instead of an out parameter.
     m.cppSignature = 'bool (wxVariant& variant, wxPGProperty* property, wxWindow* ctrl)'
     m.virtualCatcherCode = """\
-        PyObject *sipResObj = sipCallMethod(0, sipMethod, "DDD", 
-                                            property, sipType_wxPGProperty, NULL, 
+        PyObject *sipResObj = sipCallMethod(&sipIsErr, sipMethod, "DD",
+                                            property, sipType_wxPGProperty, NULL,
                                             ctrl, sipType_wxWindow, NULL);
-        if (sipResObj == Py_None) {
+        if (sipResObj == NULL) {
+            if (PyErr_Occurred())
+                PyErr_Print();
             sipRes = false;
-        } else {
-            sipParseResult(&sipIsErr, sipMethod, sipResObj, "bH5", &sipRes, sipType_wxPGVariant, &variant);
+        }
+        else if (sipResObj == Py_None) {
+            sipRes = false;
+        } else if (sipResObj && !sipIsErr) {
+            sipParseResult(&sipIsErr, sipMethod, sipResObj, "(bH5)", &sipRes, sipType_wxPGVariant, &variant);
         }
         """
 
@@ -83,6 +88,13 @@ def run():
     for item in module.allItems():
         if hasattr(item, 'type') and 'wxVariant' in item.type:
             item.type = item.type.replace('wxVariant', 'wxPGVariant')
+
+    # wxPGWindowList doesn't expect to own these, but wxPropertyGrid does,
+    # so flag them as transferred to the C++ side.
+    c = module.find('wxPGWindowList')
+    c.find('wxPGWindowList.primary').transfer = True
+    c.find('wxPGWindowList.secondary').transfer = True
+    c.find('SetSecondary.secondary').transfer = True
 
     #-----------------------------------------------------------------
     tools.doCommonTweaks(module)

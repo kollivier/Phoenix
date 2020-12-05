@@ -17,8 +17,6 @@ class grid_Tests(wtc.WidgetTestCase):
 
     def test_grid00(self):
         wx.grid.GRID_AUTOSIZE
-        wx.grid.GRID_COLUMN
-        wx.grid.GRID_ROW
         wx.grid.GRID_DRAW_ROWS_HEADER
         wx.grid.GRID_DRAW_COLS_HEADER
         wx.grid.GRID_DRAW_CELL_LINES
@@ -314,14 +312,6 @@ class grid_Tests(wtc.WidgetTestCase):
         wx.grid.Grid.SetCellHighlightPenWidth  # Does it exist
 
 
-    def test_grid42(self):
-        # old names
-        wx.grid.Grid.wxGridSelectCells
-        wx.grid.Grid.wxGridSelectRows
-        wx.grid.Grid.wxGridSelectColumns
-        wx.grid.Grid.wxGridSelectRowsOrColumns
-
-
     def test_grid43(self):
         # new names
         wx.grid.Grid.SelectCells
@@ -340,6 +330,46 @@ class grid_Tests(wtc.WidgetTestCase):
         obj2 = wx.grid.GridCellCoords(im)
         assert obj == obj2
 
+
+    def test_grid44(self):
+        g = wx.grid.Grid(self.frame)
+        g.CreateGrid(10,10)
+        g.SelectBlock((1,1), (5,5))
+
+        tl = g.GetSelectionBlockTopLeft()
+        br = g.GetSelectionBlockBottomRight()
+
+        assert tl[0].Get() == (1,1)
+        assert br[0].Get() == (5,5)
+
+
+    def test_grid45(self):
+        # See issue #297
+        g = wx.grid.Grid(self.frame)
+        g.CreateGrid(10,10)
+        g.SelectBlock((1,1), (5,5))
+
+        tl = g.GetSelectionBlockTopLeft()[0]
+        br = g.GetSelectionBlockBottomRight()[0]
+
+        assert tl.Get() == (1,1)
+        assert br.Get() == (5,5)
+
+    def test_grid46(self):
+        g = wx.grid.Grid(self.frame)
+        g.CreateGrid(10,10)
+        g.SelectBlock((1,1), (5,5))
+        g.SelectBlock((6,5), (7,9), addToSelected=True)
+
+        blocks = g.GetSelectedBlocks()
+        assert isinstance(blocks, wx.grid.GridBlocks)
+
+        count = 0
+        for block in blocks:
+            count += 1
+            assert isinstance(block, wx.grid.GridBlockCoords)
+
+        assert count == 2
 
 #---------------------------------------------------------------------------
 

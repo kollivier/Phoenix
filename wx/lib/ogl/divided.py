@@ -49,10 +49,11 @@ class DividedShapeControlPoint(ControlPoint):
     def OnDragLeft(self, draw, x, y, keys = 0, attachment = 0):
         """The drag left handler."""
         dc = wx.MemoryDC()
-        dc.SelectObject(self.GetCanvas()._Buffer)
+        dc.SelectObject(self.GetCanvas().GetBuffer())
+        self.GetCanvas().PrepareDC(dc)
         dc.SetLogicalFunction(OGLRBLF)
 
-        dottedPen = wx.Pen(wx.Colour(0, 0, 0), 1, wx.PENSTYLE_DOT)
+        dottedPen = wx.Pen(wx.BLACK, 1, wx.PENSTYLE_DOT)
         dc.SetPen(dottedPen)
         dc.SetBrush(wx.TRANSPARENT_BRUSH)
 
@@ -67,10 +68,11 @@ class DividedShapeControlPoint(ControlPoint):
     def OnBeginDragLeft(self, x, y, keys = 0, attachment = 0):
         """The begin drag left handler."""
         dc = wx.MemoryDC()
-        dc.SelectObject(self.GetCanvas()._Buffer)
+        dc.SelectObject(self.GetCanvas().GetBuffer())
+        self.GetCanvas().PrepareDC(dc)
         dc.SetLogicalFunction(OGLRBLF)
 
-        dottedPen = wx.Pen(wx.Colour(0, 0, 0), 1, wx.PENSTYLE_DOT)
+        dottedPen = wx.Pen(wx.BLACK, 1, wx.PENSTYLE_DOT)
         dc.SetPen(dottedPen)
         dc.SetBrush(wx.TRANSPARENT_BRUSH)
 
@@ -87,7 +89,8 @@ class DividedShapeControlPoint(ControlPoint):
     def OnEndDragLeft(self, x, y, keys = 0, attachment = 0):
         """The end drag left handler."""
         dc = wx.MemoryDC()
-        dc.SelectObject(self.GetCanvas()._Buffer)
+        dc.SelectObject(self.GetCanvas().GetBuffer())
+        self.GetCanvas().PrepareDC(dc)
 
         dividedObject = self._shape
         if not dividedObject.GetRegions()[self.regionId]:

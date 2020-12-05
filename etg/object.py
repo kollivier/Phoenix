@@ -3,7 +3,7 @@
 # Author:      Robin Dunn
 #
 # Created:     9-Nov-2010
-# Copyright:   (c) 2010-2017 by Total Control Software
+# Copyright:   (c) 2010-2020 by Total Control Software
 # License:     wxWindows License
 #---------------------------------------------------------------------------
 
@@ -20,8 +20,10 @@ DOCSTRING = ""
 ITEMS  = [
     'wxRefCounter',
     'wxObject',
-#    'wxClassInfo',
-]
+    'wxClassInfo',
+    #'wxObjectDataPtr',
+    'classwx_object_data_ptr_3_01_t_01_4.xml',
+    ]
 
 #---------------------------------------------------------------------------
 
@@ -38,9 +40,13 @@ def run():
 
     module.find('wxCreateDynamicObject').ignore()
 
-    #module.find('wxClassInfo').abstract = True
-    #module.find('wxClassInfo.wxClassInfo').ignore()
 
+    #--------------------------------------------------
+    c = module.find('wxClassInfo')
+    assert isinstance(c, etgtools.ClassDef)
+    module.insertItemBefore(c, etgtools.TypedefDef(type='void*', name='wxObjectConstructorFn'))
+    module.find('wxClassInfo').abstract = True
+    module.find('wxClassInfo.wxClassInfo').ignore()
 
 
     #--------------------------------------------------
@@ -55,7 +61,6 @@ def run():
     c = module.find('wxObject')
     c.find('operator delete').ignore()
     c.find('operator new').ignore()
-    c.find('GetClassInfo').ignore()
     c.find('IsKindOf').ignore()
 
     # EXPERIMENTAL: By turning off the virtualness of the wxObject dtor, and
@@ -72,6 +77,7 @@ def run():
     # those classes with custom C++ code. (See wxFont and wxAcceleratorTable
     # for examples.)
     c.find('~wxObject').isVirtual = False
+    c.find('GetClassInfo').isVirtual = False
 
     c.addCppMethod('const wxChar*', 'GetClassName', '()',
         body='return self->GetClassInfo()->GetClassName();',
@@ -84,6 +90,28 @@ def run():
 
 
     tools.addSipConvertToSubClassCode(c)
+
+    #-----------------------------------------------------------------
+    c = module.find('wxObjectDataPtr< T >')
+    c.name = 'wxObjectDataPtr'
+    c.piIgnored = True
+    c.docsIgnored = True
+
+    # fix up the ctor/dtor due to name change above
+    ctor = c.find('wxObjectDataPtr')
+    ctor.isCtor = True
+    dtor = c.find('~wxObjectDataPtr')
+    dtor.isDtor = True
+
+    # more name hacks/fixes
+    c.nodeBases = ({'wxObjectDataPtr': ('wxObjectDataPtr', [])},
+                   ['wxObjectDataPtr'])
+
+    # ignore the smart pointer methods, for now
+    c.find('operator->').ignore()
+    c.find('operator*').ignore()
+    c.find('operator unspecified_bool_type').ignore()
+
 
     #-----------------------------------------------------------------
     tools.doCommonTweaks(module)

@@ -44,6 +44,10 @@
 # o wxMaskedTextCtrl -> masked.TextCtrl
 # o wxTimeCtrl -> masked.TimeCtrl
 #
+# 2/4/2018   - jensgoe (mail@jensgoepfert.de)
+# o wx.Validator_IsSilent() -> wx.Validator.IsSilent()
+#
+
 
 """
 *TimeCtrl* provides a multi-cell control that allows manipulation of a time
@@ -522,7 +526,7 @@ class TimeCtrl(BaseMaskedTextCtrl):
 
         # assign keyword args as appropriate:
         for key, param_value in kwargs.items():
-            if key not in TimeCtrl.valid_ctrl_params.keys():
+            if key not in TimeCtrl.valid_ctrl_params:
                 raise AttributeError('invalid keyword argument "%s"' % key)
 
             if key == 'format':
@@ -1339,7 +1343,7 @@ class TimeCtrl(BaseMaskedTextCtrl):
             self.SetValue(newvalue)
 
         except ValueError:  # must not be in bounds:
-            if not wx.Validator_IsSilent():
+            if not wx.Validator.IsSilent():
                 wx.Bell()
 ##        dbg(indent=0)
 

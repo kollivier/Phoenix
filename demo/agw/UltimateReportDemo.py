@@ -659,7 +659,7 @@ class UltimateListCtrlPanel(wx.Panel, listmix.ColumnSorterMixin):
         fontMask = ULC.ULC_MASK_FONTCOLOUR|ULC.ULC_MASK_FONT
         fullMask = fontMask|ULC.ULC_MASK_BACKCOLOUR
 
-        customRow, customCol, colours = [0, 3], [2, 1], [wx.RED, wx.Colour("Yellow")]
+        customRow, customCol, colours = [0, 3], [2, 1], [wx.RED, wx.YELLOW]
 
         for row, col, colour in zip(customRow, customCol, colours):
             item = self.list.GetItem(row, col)
@@ -855,12 +855,12 @@ class UltimateListCtrlPanel(wx.Panel, listmix.ColumnSorterMixin):
 
         # only do this part the first time so the events are only bound once
         if not hasattr(self, "popupID1"):
-            self.popupID1 = wx.NewId()
-            self.popupID2 = wx.NewId()
-            self.popupID3 = wx.NewId()
-            self.popupID4 = wx.NewId()
-            self.popupID5 = wx.NewId()
-            self.popupID6 = wx.NewId()
+            self.popupID1 = wx.NewIdRef()
+            self.popupID2 = wx.NewIdRef()
+            self.popupID3 = wx.NewIdRef()
+            self.popupID4 = wx.NewIdRef()
+            self.popupID5 = wx.NewIdRef()
+            self.popupID6 = wx.NewIdRef()
 
             self.Bind(wx.EVT_MENU, self.OnPopupOne, id=self.popupID1)
             self.Bind(wx.EVT_MENU, self.OnPopupTwo, id=self.popupID2)
@@ -1021,8 +1021,8 @@ class TestFrame(wx.Frame):
                                               self.ulc.list.GetSecondGradientColour())
         self.firstcolour.Bind(csel.EVT_COLOURSELECT, self.OnFirstColour)
         self.secondcolour.Bind(csel.EVT_COLOURSELECT, self.OnSecondColour)
-        sizerb3.Add(self.firstcolour, 0, wx.TOP|wx.BOTTOM|wx.ALIGN_CENTER_HORIZONTAL, 3)
-        sizerb3.Add(self.secondcolour, 0, wx.LEFT|wx.TOP|wx.BOTTOM|wx.ALIGN_CENTER_HORIZONTAL, 3)
+        sizerb3.Add(self.firstcolour, 0, wx.TOP|wx.BOTTOM, 3)
+        sizerb3.Add(self.secondcolour, 0, wx.LEFT|wx.TOP|wx.BOTTOM, 3)
         sizerb.Add(self.checkgradient, 0, wx.ALL, 3)
         sizerb.Add(sizerb1, 0)
         sizerb.Add(sizerb2, 0)

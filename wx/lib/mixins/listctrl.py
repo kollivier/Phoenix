@@ -5,7 +5,7 @@
 # Author:      Robin Dunn
 #
 # Created:     15-May-2001
-# Copyright:   (c) 2001-2017 by Total Control Software
+# Copyright:   (c) 2001-2020 by Total Control Software
 # Licence:     wxWindows license
 # Tags:        phoenix-port, py3-port
 #----------------------------------------------------------------------------
@@ -297,17 +297,11 @@ class ListCtrlAutoWidthMixin:
 
         resizeCol = max(1, resizeCol)
 
-        if self._resizeColMinWidth == None:
+        if self._resizeColMinWidth is None:
             self._resizeColMinWidth = self.GetColumnWidth(resizeCol - 1)
 
-        # We're showing the vertical scrollbar -> allow for scrollbar width
-        # NOTE: on GTK, the scrollbar is included in the client size, but on
-        # Windows it is not included
+        # Get total width
         listWidth = self.GetClientSize().width
-        if wx.Platform != '__WXMSW__':
-            if self.GetItemCount() > self.GetCountPerPage():
-                scrollWidth = wx.SystemSettings.GetMetric(wx.SYS_VSCROLL_X)
-                listWidth = listWidth - scrollWidth
 
         totColWidth = 0 # Width of all columns except last one.
         for col in range(numCols):
@@ -449,7 +443,7 @@ class TextEditMixin:
     """
 
     editorBgColour = wx.Colour(255,255,175) # Yellow
-    editorFgColour = wx.Colour(0,0,0)       # black
+    editorFgColour = wx.BLACK
 
     def __init__(self):
         #editor = wx.TextCtrl(self, -1, pos=(-1,-1), size=(-1,-1),
@@ -611,14 +605,15 @@ class TextEditMixin:
 
         y0 = self.GetItemRect(row)[1]
 
-        editor = self.editor
-        editor.SetSize(x0-scrolloffset,y0, x1,-1)
+        def _activate_editor(editor):
+            editor.SetSize(x0-scrolloffset,y0, x1,-1, wx.SIZE_USE_EXISTING)
+            editor.SetValue(self.GetItem(row, col).GetText())
+            editor.Show()
+            editor.Raise()
+            editor.SetSelection(-1,-1)
+            editor.SetFocus()
 
-        editor.SetValue(self.GetItem(row, col).GetText())
-        editor.Show()
-        editor.Raise()
-        editor.SetSelection(-1,-1)
-        editor.SetFocus()
+        wx.CallAfter(_activate_editor, self.editor)
 
         self.curRow = row
         self.curCol = col
@@ -640,11 +635,10 @@ class TextEditMixin:
         evt = wx.ListEvent(wx.wxEVT_COMMAND_LIST_END_LABEL_EDIT, self.GetId())
         evt.Index = self.curRow
         evt.Column = self.curCol
-        item = self.GetItem(self.curRow, self.curCol)
-        evt.Item.SetId(item.GetId())
-        evt.Item.SetColumn(item.GetColumn())
-        evt.Item.SetData(item.GetData())
-        evt.Item.SetText(text) #should be empty string if editor was canceled
+        item = wx.ListItem(self.GetItem(self.curRow, self.curCol))
+        item.SetText(text)
+        evt.SetItem(item)
+
         ret = self.GetEventHandler().ProcessEvent(evt)
         if not ret or evt.IsAllowed():
             if self.IsVirtual():
@@ -652,7 +646,7 @@ class TextEditMixin:
                 # data source
                 self.SetVirtualData(self.curRow, self.curCol, text)
             else:
-                self.SetStringItem(self.curRow, self.curCol, text)
+                self.SetItem(self.curRow, self.curCol, text)
         self.RefreshItem(self.curRow)
 
     def _SelectIndex(self, row):
@@ -698,6 +692,11 @@ HISTORY:
 1.1     - Initial version
 """
 
+_warning = (
+"The CheckListCtrlMixin class has been made redundant by new checkbox features in the "
+"wx.ListCtrl class. It is advised to switch your code to use that instead of this mixin.")
+
+
 class CheckListCtrlMixin(object):
     """
     This is a mixin for ListCtrl which add a checkbox in the first
@@ -715,8 +714,14 @@ class CheckListCtrlMixin(object):
           CheckItem().
 
     You should not set a imagelist for the ListCtrl once this mixin is used.
+
+    WARNING: This class is obsolete as wx.ListCtrl now includes nearly the same
+    functionality.
     """
     def __init__(self, check_image=None, uncheck_image=None, imgsz=(16,16)):
+        import warnings
+        warnings.warn(_warning)
+
         if check_image is not None:
             imgsz = check_image.GetSize()
         elif uncheck_image is not None:
@@ -733,7 +738,7 @@ class CheckListCtrlMixin(object):
 
         self.uncheck_image = self.__imagelist_.Add(uncheck_image)
         self.check_image = self.__imagelist_.Add(check_image)
-        self.SetImageList(self.__imagelist_, wx.IMAGE_LIST_SMALL)
+        self.AssignImageList(self.__imagelist_, wx.IMAGE_LIST_SMALL)
         self.__last_check_ = None
 
         self.Bind(wx.EVT_LEFT_DOWN, self.__OnLeftDown_)
@@ -800,12 +805,12 @@ class CheckListCtrlMixin(object):
     def IsChecked(self, index):
         return self.GetItem(index).GetImage() == 1
 
-    def CheckItem(self, index, check = True):
+    def CheckItem(self, index, check=True):
         img_idx = self.GetItem(index).GetImage()
-        if img_idx == 0 and check is True:
+        if img_idx == 0 and check:
             self.SetItemImage(index, 1)
             self.OnCheckItem(index, True)
-        elif img_idx == 1 and check is False:
+        elif img_idx == 1 and not check:
             self.SetItemImage(index, 0)
             self.OnCheckItem(index, False)
 

@@ -3,7 +3,7 @@
 # Author:      Robin Dunn
 #
 # Created:     3-Nov-2010
-# Copyright:   (c) 2010-2017 by Total Control Software
+# Copyright:   (c) 2010-2020 by Total Control Software
 # License:     wxWindows License
 #---------------------------------------------------------------------------
 
@@ -48,10 +48,8 @@ class SipWrapperGenerator(generators.WrapperGeneratorBase):
         destDir = os.path.dirname(destFile)
         if not os.path.exists(destDir):
             os.makedirs(destDir)
-        f = textfile_open(destFile, 'wt')
-        f.write(stream.getvalue())
-        f.close()
-
+        with textfile_open(destFile, 'wt') as f:
+            f.write(stream.getvalue())
 
     #-----------------------------------------------------------------------
     def generateModule(self, module, stream):
@@ -198,9 +196,9 @@ from .%s import *
                 # SIP appends them all together.
                 _needDocstring = False
 
-            if function.mustHaveAppFlag:
+            if function.preMethodCode:
                 stream.write('%PreMethodCode\n')
-                stream.write(nci("if (!wxPyCheckForApp()) return NULL;\n", 4))
+                stream.write(nci(function.preMethodCode, 4))
                 stream.write('%End\n')
 
             if function.cppCode:
@@ -433,11 +431,11 @@ from .%s import *
         if klass.ignored:
             return
 
-        # Propagate mustHaveApp setting to the ctors
-        if klass.mustHaveAppFlag:
+        # Propagate preMethodCode setting to the ctors
+        if klass.preMethodCode:
             for item in klass.allItems():
                 if isinstance(item, extractors.MethodDef) and item.isCtor:
-                    item.mustHaveApp(True)
+                    item.preMethodCode = klass.preMethodCode
 
         # write the class header
         if klass.templateParams:
@@ -574,7 +572,19 @@ from .%s import *
         if memberVar.ignored:
             return
         stream.write('%s%s %s' % (indent, memberVar.type, memberVar.name))
-        stream.write('%s;\n\n' % self.annotate(memberVar))
+        stream.write(self.annotate(memberVar))
+        if memberVar.getCode or memberVar.setCode:
+            stream.write('\n%s{\n' % (indent,))
+            if memberVar.getCode:
+                stream.write('%s%%GetCode\n' % (indent))
+                stream.write(nci(memberVar.getCode, len(indent)+4))
+                stream.write('%s%%End\n' % (indent))
+            if memberVar.setCode:
+                stream.write('%s%%SetCode\n' % (indent))
+                stream.write(nci(memberVar.setCode, len(indent)+4))
+                stream.write('%s%%End\n' % (indent))
+            stream.write('%s}' % (indent,))
+        stream.write(';\n\n')
 
 
     def generateProperty(self, prop, stream, indent):
@@ -675,9 +685,9 @@ from .%s import *
                 # SIP appends them all together.
                 _needDocstring = False
 
-            if method.mustHaveAppFlag:
+            if method.preMethodCode:
                 stream.write('%s%%PreMethodCode\n' % indent)
-                stream.write(nci("if (!wxPyCheckForApp()) return NULL;\n", len(indent)+4))
+                stream.write(nci(method.preMethodCode, len(indent)+4))
                 stream.write('%s%%End\n' % indent)
 
             if method.cppCode:
@@ -870,7 +880,11 @@ from .%s import *
                 else:
                     if pnames:
                         pnames = ', ' + pnames
-                    stream.write('%s(sipCpp%s);\n' % (fname, pnames))
+                    if method.isSlot:
+                        argname = 'a0'
+                    else:
+                        argname = 'sipCpp'
+                    stream.write('%s(%s%s);\n' % (fname, argname, pnames))
             else:
                 stream.write('%s(%s);\n' % (fname, pnames))
             stream.write('%sPy_END_ALLOW_THREADS\n' % (indent+' '*4))
@@ -899,16 +913,30 @@ from .%s import *
         assert isinstance(method, extractors.CppMethodDef_sip)
         if method.ignored:
             return
+        _needDocstring = getattr(method, '_needDocstring', True)
         cppSig = " [ %s ]" % method.cppSignature if method.cppSignature else ""
         if method.isCtor:
             stream.write('%s%s%s%s%s;\n' %
                          (indent, method.name, method.argsString, self.annotate(method), cppSig))
         else:
-            stream.write('%s%s %s%s%s%s;\n' %
-                         (indent, method.type, method.name, method.argsString,
+            virtual = "virtual " if method.isVirtual else ""
+            stream.write('%s%s%s %s%s%s%s;\n' %
+                         (indent, virtual, method.type, method.name, method.argsString,
                           self.annotate(method), cppSig))
+        # write the docstring
+        if  _needDocstring and not (method.isCtor or method.isDtor):
+            self.generateDocstring(method, stream, indent)
+            # We only write a docstring for the first overload, otherwise
+            # SIP appends them all together.
+            _needDocstring = False
         stream.write('%s%%MethodCode\n' % indent)
+        if not (method.isCtor and method.isDtor):
+            stream.write('%sPyErr_Clear();\n' % (indent+' '*4))
+            stream.write('%sPy_BEGIN_ALLOW_THREADS\n' % (indent+' '*4))
         stream.write(nci(method.body, len(indent)+4))
+        if not (method.isCtor and method.isDtor):
+            stream.write('%sPy_END_ALLOW_THREADS\n' % (indent+' '*4))
+            stream.write('%sif (PyErr_Occurred()) sipIsErr = 1;\n' % (indent+' '*4))
         stream.write('%s%%End\n\n' % indent)
 
 
@@ -964,6 +992,8 @@ from .%s import *
                 annotations.append('ArraySize')
             if item.keepReference:
                 annotations.append('KeepReference')
+            if item.constrained:
+                annotations.append('Constrained')
 
         if isinstance(item, (extractors.ParamDef, extractors.FunctionDef)):
             if item.transfer:
@@ -978,6 +1008,8 @@ from .%s import *
         if isinstance(item, extractors.VariableDef):
             if item.pyInt:
                 annotations.append('PyInt')
+            if item.noSetter:
+                annotations.append('NoSetter')
 
         if isinstance(item, extractors.TypedefDef):
             if item.noTypeName:
@@ -1014,7 +1046,7 @@ from .%s import *
                 annotations.append('External')
             if item.noDefCtor:
                 annotations.append('NoDefaultCtors')
-            if item.singlton:
+            if item.singleton:
                 annotations.append('DelayDtor')
 
         if annotations:

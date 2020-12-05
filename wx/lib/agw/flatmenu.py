@@ -1050,7 +1050,7 @@ class FMRenderer(object):
 
         # switch according to the status
         if state == ControlFocus:
-            if colour == None:
+            if colour is None:
                 penColour   = self.buttonFocusBorderColour
                 brushColour = self.buttonFocusFaceColour
             else:
@@ -1058,14 +1058,14 @@ class FMRenderer(object):
                 brushColour = ArtManager.Get().LightColour(colour, 75)
 
         elif state == ControlPressed:
-            if colour == None:
+            if colour is None:
                 penColour   = self.buttonPressedBorderColour
                 brushColour = self.buttonPressedFaceColour
             else:
                 penColour   = colour
                 brushColour = ArtManager.Get().LightColour(colour, 60)
         else:
-            if colour == None:
+            if colour is None:
                 penColour   = self.buttonBorderColour
                 brushColour = self.buttonFaceColour
             else:
@@ -1192,8 +1192,8 @@ class FMRenderer(object):
                         memDc.SetTextForeground(textColour)
 
                     # Fill the bitmap with the masking colour
-                    memDc.SetPen(wx.Pen(wx.Colour(255, 0, 0)) )
-                    memDc.SetBrush(wx.Brush(wx.Colour(255, 0, 0)) )
+                    memDc.SetPen(wx.RED_PEN)
+                    memDc.SetBrush(wx.RED_BRUSH)
                     memDc.DrawRectangle(0, 0, rect.width, rect.height)
                     memDc.SetFont(fnt)
 
@@ -1250,7 +1250,7 @@ class FMRenderer(object):
                     if not menubar._isLCD:
                         memDc.SelectObject(wx.NullBitmap)
                         # Set masking colour to the bitmap
-                        bmp.SetMask(wx.Mask(bmp, wx.Colour(255, 0, 0)))
+                        bmp.SetMask(wx.Mask(bmp, wx.RED))
                         if selected:
                             item.SetSelectedTextBitmap(bmp)
                         else:
@@ -2234,7 +2234,7 @@ class MenuEntryInfo(object):
             self._rect = wx.Rect()
             self._state = state
             if cmd == wx.ID_ANY:
-                cmd = wx.NewId()
+                cmd = wx.NewIdRef()
 
             self._cmd = cmd             # the menu itself accelerator id
 
@@ -3560,7 +3560,7 @@ class FlatMenuBar(wx.Panel):
         if not self._moreMenu:
             # first time
             self._moreMenu = FlatMenu(self)
-            self._popupDlgCmdId = wx.NewId()
+            self._popupDlgCmdId = wx.NewIdRef()
 
             # Connect an event handler for this event
             self.Connect(self._popupDlgCmdId, -1, wxEVT_FLAT_MENU_SELECTED, self.OnCustomizeDlg)
@@ -3956,7 +3956,7 @@ class FlatMenuButton(object):
         self._parent = menu
         self._pos = wx.Point()
         self._size = wx.Size()
-        self._timerID = wx.NewId()
+        self._timerID = wx.NewIdRef()
         self._scrollOnHover = scrollOnHover
 
         if not disabledBmp.IsOk():
@@ -4565,11 +4565,11 @@ class FlatToolbarItem(object):
         """
 
         if id == wx.ID_ANY:
-            id = wx.NewId()
+            id = wx.NewIdRef()
 
         if controlType is None:    # Is a separator
             self._normalBmp = wx.NullBitmap
-            self._id = wx.NewId()
+            self._id = wx.NewIdRef()
             self._label = ""
             self._disabledImg = wx.NullBitmap
             self._customCtrl = None
@@ -4837,7 +4837,7 @@ class FlatMenuItem(object):
         self._helpString = helpString
 
         if id == wx.ID_ANY:
-            id = wx.NewId()
+            id = wx.NewIdRef()
 
         self._id = id
         self._parentMenu = parent
@@ -5026,7 +5026,7 @@ class FlatMenuItem(object):
     def IsSubMenu(self):
         """ Returns whether an item is a sub-menu or not. """
 
-        return self._subMenu != None
+        return self._subMenu is not None
 
 
     def SetNormalBitmap(self, bmp):
@@ -7089,7 +7089,7 @@ class FlatMenu(FlatMenuBase):
          ``wx.NOT_FOUND`` if one was not found.
         """
 
-        if item == None or len(self._itemsArr) == 0:
+        if item is None or len(self._itemsArr) == 0:
             return wx.NOT_FOUND
 
         for i in range(len(self._itemsArr)):

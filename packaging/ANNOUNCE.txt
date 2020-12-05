@@ -1,63 +1,95 @@
 
 [[ send to:
-   wxpython-users@googlegroups.com,
-   wxpython-dev@googlegroups.com,
-   wx-users@googlegroups.com,
-   wx-announce@googlegroups.com,
+   wxpython-users@googlegroups.com
+   wxpython-dev@googlegroups.com
+   wx-users@googlegroups.com
+   wx-announce@googlegroups.com
    Python-Announce-List@Python.Org
    ]]
 
 
-Announcing wxPython 4.0.0b1
-===========================
 
+Announcing wxPython 4.1.1
+=========================
 
-PyPI:   https://pypi.python.org/pypi/wxPython/4.0.0b1
+PyPI:   https://pypi.org/project/wxPython/4.1.1
 Extras: https://extras.wxPython.org/wxPython4/extras/
+Pip:    ``pip install wxPython==4.1.1``
 
-Changes in this release include the following:
+New and improved in this release:
 
-* Various little tweaks and fixes in some of the demo samples.
+* This should have been mentioned in the notes for the last release,
+  but alas, it wandered away and got lost. wxWidgets is now validating
+  the flags passed when adding items to a sizer, to ensure that they
+  are the correct flags for the type of the sizer. If the given flags
+  do not make sense, for example using horizontal alignment flags in a
+  horizontal box sizer, then a wxAssertionError error is raised.
 
-* Fixes in wx.lib.imagebrowser so it looks and acts better on OSX.
+* Fixed missing binder for wxEVT_STC_AUTOCOMP_SELECTION_CHANGE. (#1613)
 
-* Fixed problem due to wxModules not being initialized when non-core
-  extensions are imported.
+* DataViewModel.HasValue can be overridden and will inform the
+  DataViewCtrl whether or not an item and column has data. If HasValue
+  returns False, then GetValue for that item/col will not be called.
+  This allows a distinction between a truly empty cell, and one that
+  has a value even if it is an empty string. (#1600)
 
-* Fixed issue in wx.TreeItemId comparison methods affecting PyCrust and
-  other tools.
+* Added flag that allows blocking of item dragging in the
+  UltimateListControl class. (PR#1620)
 
-* Restore the simplified names for the wxGridSelectionModes enum that were
-  present in Classic.
+* Add the column index to notification events in UltimateListControl
+  (PR#1630)
 
-* Add accessors for the internal widgets in the wx.EditableListBox.
+* Added orientation parameter to UltimateListControl.GetScrollPos.
+  (PR#1632)
 
-* Fixes in wx.lib.eventwatcher to avoid deprecated methods and other Phoenix
-  related changes.
+* wx.lib.agw.aui.AuiNotebook RemovePage() now hides the removed page,
+  so it needs to be shown again if it is reused in another place.
+  (PR#1668)
 
-* Correctly transfer ownership of the input stream in wx.FSFile.
+* Fixed issue that could modify `bytes` objects under Python. (PR#1680)
 
-* Ensure the license files are getting into the source tarball and the
-  binary wheel files.
+* Added wx.lib.agw.aui.EVT_AUI_PANE_CLOSE event which is sent when a
+  AUI (the agw version) Pane has been closed (after it has been
+  closed, not when it is about to be closed, which is when
+  EVT_AUI_PANE_CLOSE is sent.) (PR#1628)
 
-* Add wrappers for the classes derived from wxImageHandler.
+* Exposed the wx.DC methods GetGraphicsContext and SetGraphicsContext.
+  Depending on the platform and the type of the DC, there may be a
+  wx.GraphicsContext used for the implementation of the DC. If so, the
+  GetGraphicsContext method enables access to it. Be sure to check
+  that the return value is not None before trying to use it.
 
-* Fix wx.lib.plot.polyline to not attempt to draw the spline if there are
-  less than 3 points.
+* Simplified the implementation of the wx.App.InitLocale method. See the
+  MigrationGuide for more information.
 
-* Transfer the ownership of the prop arg in wx.propgrid.PGProperty.AddChild
-  and AddPrivateChild. Various other fixes in wx.propgrid classes for
-  backwards compatibility and to fix problems caused by mismatches between
-  customizations that were done for Classic and how Phoenix does things by
-  default. Also solved some problems in the PropertyGrid sample in the demo.
+* Added wx.lib.agw.aui.AUI_DOCKART_HINT_WINDOW_BORDER_COLOUR constant
+  so the hint window border color can be themed as well.
 
-* Add missing HtmlCell.FindCellByPos.
+* The wx.lib.mixins.listCtrl.CheckListCtrlMixin is now obsolete
+  because wx.ListCtrl has new functionality which does pretty much the
+  same thing. In fact there is some overlap in method names which may
+  trip up some use cases. It is advised to drop the use of
+  CheckListCtrlMixin and just use the wx.ListBox functionality. You
+  will need to call EnableCheckBoxes to turn it on, and you may need
+  to change some event handlers or overloaded methods.
 
-* Enhance the DLG_UNIT convenience function such that if something other than
-  a wx.Point or wx.Size was passed in then the return value will be a tuple.
-  This eliminates some surprises that are possible due to auto-conversion of
-  tuples to points or sizes.
+* wx.html2.WebView is now able to use Microsoft's Edge browser
+  component as its backend renderer. This should improve the
+  capabilities of the WebView widget on Windows, and be more
+  consistent with the WebViews on the other platforms, compared to the
+  original IE 11 backend. Using this backed requires that a new-ish
+  version of the Edge browser is installed on the end user's computer.
 
+* Added the wx.Image.ConvertToRegion method. This lets you create a
+  wx.Region from an image and a specified color or the mask if the
+  image has one. This was done to workaround a bug in wxMac, but it
+  seems worthwhile enough to keep it around even after the bug was
+  fixed.
+
+* Added the missing context manager methods for wx.LogNull. (#1842)
+
+* Refactored ScrolledThumbnail out of agw.ThumbnailCtrl so as to be
+  usable outside of ThumbnailCtrl.
 
 
 
@@ -100,7 +132,7 @@ Due to some things being cleaned up, reorganized, simplified and
 dehackified wxPython Phoenix is not completely backwards compatible
 with wxPython Classic.  This is intended. In general, however, the API
 differences tend to be minor and some applications can use Phoenix
-with slight, or even no modifications.  In some other cases the
+with slight, or even with no modifications.  In some other cases the
 correct way to do things was also available in Classic and it's only
 the wrong way that has been removed from Phoenix.  For more
 information there is a Migration Guide document available at:

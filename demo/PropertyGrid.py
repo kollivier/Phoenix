@@ -63,7 +63,7 @@ class ValueObject:
 
 
 class IntProperty2(wxpg.PGProperty):
-    """\
+    """
     This is a simple re-implementation of wxIntProperty.
     """
     def __init__(self, label, name = wxpg.PG_LABEL, value=0):
@@ -71,7 +71,7 @@ class IntProperty2(wxpg.PGProperty):
         self.SetValue(value)
 
     def GetClassName(self):
-        """\
+        """
         This is not 100% necessary and in future is probably going to be
         automated to return class name.
         """
@@ -84,8 +84,9 @@ class IntProperty2(wxpg.PGProperty):
         return str(value)
 
     def StringToValue(self, s, flags):
-        """ If failed, return False or (False, None). If success, return tuple
-            (True, newValue).
+        """
+        If failed, return False or (False, None). If success, return tuple
+        (True, newValue).
         """
         try:
             v = int(s)
@@ -94,11 +95,12 @@ class IntProperty2(wxpg.PGProperty):
         except (ValueError, TypeError):
             if flags & wxpg.PG_REPORT_ERROR:
                 wx.MessageBox("Cannot convert '%s' into a number."%s, "Error")
-        return False
+        return (False, None)
 
     def IntToValue(self, v, flags):
-        """ If failed, return False or (False, None). If success, return tuple
-            (True, newValue).
+        """
+        If failed, return False or (False, None). If success, return tuple
+        (True, newValue).
         """
         if (self.GetValue() != v):
             return (True, v)
@@ -114,10 +116,10 @@ class IntProperty2(wxpg.PGProperty):
         # Mark the cell if validation failed
         validationInfo.SetFailureBehavior(wxpg.PG_VFB_MARK_CELL)
 
-        if value < -10000 or value > 10000:
+        if value is None or value < -10000 or value > 10000:
             return False
 
-        return (True, value)
+        return True
 
 
 class SizeProperty(wxpg.PGProperty):
@@ -265,7 +267,7 @@ class DirsProperty(wxpg.ArrayStringProperty):
 
 
 class PyObjectPropertyValue:
-    """\
+    """
     Value type of our sample PyObjectProperty. We keep a simple dash-delimited
     list of string given as argument to constructor.
     """
@@ -280,7 +282,7 @@ class PyObjectPropertyValue:
 
 
 class PyObjectProperty(wxpg.PGProperty):
-    """\
+    """
     Another simple example. This time our value is a PyObject.
 
     NOTE: We can't return an arbitrary python object in DoGetValue. It cannot
@@ -329,7 +331,7 @@ class SampleMultiButtonEditor(wxpg.PGTextCtrlEditor):
                                    property,
                                    pos,
                                    buttons.GetPrimarySize())
-        wnd = wnd.m_primary
+        wnd = wnd.GetPrimary()
 
         # Finally, move buttons-subwindow to correct position and make sure
         # returned wxPGWindowList contains our custom button list.
@@ -404,7 +406,7 @@ class SingleChoiceProperty(wxpg.StringProperty):
 
 
 class TrivialPropertyEditor(wxpg.PGEditor):
-    """\
+    """
     This is a simple re-creation of TextCtrlWithButton. Note that it does
     not take advantage of wx.TextCtrl and wx.Button creation helper functions
     in wx.PropertyGrid.
@@ -433,10 +435,10 @@ class TrivialPropertyEditor(wxpg.PGEditor):
 
             s = property.GetDisplayedString();
 
-            tc = wx.TextCtrl(propgrid.GetPanel(), wxpg.PG_SUBID1, s,
+            tc = wx.TextCtrl(propgrid.GetPanel(), wx.ID_ANY, s,
                              (x,y), (w,h),
                              wx.TE_PROCESS_ENTER)
-            btn = wx.Button(propgrid.GetPanel(), wxpg.PG_SUBID2, '...',
+            btn = wx.Button(propgrid.GetPanel(), wx.ID_ANY, '...',
                             (x+w, y),
                             (bw, h), wx.WANTS_CHARS)
             return wxpg.PGWindowList(tc, btn)
@@ -479,7 +481,7 @@ class TrivialPropertyEditor(wxpg.PGEditor):
 
     def GetValueFromControl(self, property, ctrl):
         """ Return tuple (wasSuccess, newValue), where wasSuccess is True if
-            different value was acquired succesfully.
+            different value was acquired successfully.
         """
         tc = ctrl
         textVal = tc.GetValue()
@@ -487,8 +489,7 @@ class TrivialPropertyEditor(wxpg.PGEditor):
         if property.UsesAutoUnspecified() and not textVal:
             return (True, None)
 
-        res, value = property.StringToValue(textVal,
-                                            wxpg.PG_EDITABLE_VALUE)
+        res, value = property.StringToValue(textVal, wxpg.PG_FULL_VALUE)
 
         # Changing unspecified always causes event (returning
         # True here should be enough to trigger it).
@@ -505,7 +506,6 @@ class TrivialPropertyEditor(wxpg.PGEditor):
 
     def OnFocus(self, property, ctrl):
         ctrl.SetSelection(-1,-1)
-        ctrl.SetFocus()
 
 
 
@@ -533,7 +533,7 @@ class LargeImageEditor(wxpg.PGEditor):
             self.tc = wx.TextCtrl(propgrid.GetPanel(), -1,  "",
                                   (x+h,y), (2048,h), wx.BORDER_NONE)
 
-            btn = wx.Button(propgrid.GetPanel(), wxpg.PG_SUBID2, '...',
+            btn = wx.Button(propgrid.GetPanel(), wx.ID_ANY, '...',
                             (x+w, y),
                             (bw, h), wx.WANTS_CHARS)
 
@@ -593,7 +593,7 @@ class LargeImageEditor(wxpg.PGEditor):
 
     def GetValueFromControl(self, property, ctrl):
         """ Return tuple (wasSuccess, newValue), where wasSuccess is True if
-            different value was acquired succesfully.
+            different value was acquired successfully.
         """
         textVal = self.tc.GetValue()
 
@@ -678,7 +678,7 @@ class TestPanel( wx.Panel ):
                               wxpg.PG_TOOLBAR)
 
         # Show help as tooltips
-        pg.SetExtraStyle(wxpg.PG_EX_HELP_AS_TOOLTIPS)
+        pg.ExtraStyle |= wxpg.PG_EX_HELP_AS_TOOLTIPS
 
         pg.Bind( wxpg.EVT_PG_CHANGED, self.OnPropGridChange )
         pg.Bind( wxpg.EVT_PG_PAGE_CHANGED, self.OnPropGridPageChange )
@@ -701,20 +701,22 @@ class TestPanel( wx.Panel ):
         #
         # Add properties
         #
-
+        # NOTE: in this example the property names are used as variable names
+        # in one of the tests, so they need to be valid python identifiers.
+        #
         pg.AddPage( "Page 1 - Testing All" )
 
         pg.Append( wxpg.PropertyCategory("1 - Basic Properties") )
         pg.Append( wxpg.StringProperty("String",value="Some Text") )
 
-        sp = pg.Append( wxpg.StringProperty('StringProperty w/ Password flag', value='ABadPassword') )
+        sp = pg.Append( wxpg.StringProperty('StringProperty_as_Password', value='ABadPassword') )
         sp.SetAttribute('Hint', 'This is a hint')
         sp.SetAttribute('Password', True)
 
-        pg.Append( wxpg.IntProperty("Int",value=100) )
-        pg.Append( wxpg.FloatProperty("Float",value=100.0) )
-        pg.Append( wxpg.BoolProperty("Bool",value=True) )
-        boolprop = pg.Append( wxpg.BoolProperty("Bool_with_Checkbox",value=True) )
+        pg.Append( wxpg.IntProperty("Int", value=100) )
+        self.fprop = pg.Append( wxpg.FloatProperty("Float", value=123.456) )
+        pg.Append( wxpg.BoolProperty("Bool", value=True) )
+        boolprop = pg.Append( wxpg.BoolProperty("Bool_with_Checkbox", value=True) )
         pg.SetPropertyAttribute(
             "Bool_with_Checkbox",    # You can find the property by name,
             #boolprop,               # or give the property object itself.
@@ -1003,9 +1005,9 @@ class MemoDialog(wx.Dialog):
         topsizer.Add(tc,1,wx.EXPAND|wx.ALL,8)
 
         rowsizer = wx.BoxSizer( wx.HORIZONTAL )
-        rowsizer.Add(wx.Button(self,wx.ID_OK,'Ok'),0,wx.ALIGN_RIGHT|wx.ALIGN_CENTRE_VERTICAL,8)
-        rowsizer.Add((0,0),1,wx.ALIGN_RIGHT|wx.ALIGN_CENTRE_VERTICAL,8)
-        rowsizer.Add(wx.Button(self,wx.ID_CANCEL,'Cancel'),0,wx.ALIGN_RIGHT|wx.ALIGN_CENTRE_VERTICAL,8)
+        rowsizer.Add(wx.Button(self,wx.ID_OK,'Ok'),0,wx.ALIGN_CENTRE_VERTICAL,8)
+        rowsizer.Add((0,0),1,wx.ALIGN_CENTRE_VERTICAL,8)
+        rowsizer.Add(wx.Button(self,wx.ID_CANCEL,'Cancel'),0,wx.ALIGN_CENTRE_VERTICAL,8)
         topsizer.Add(rowsizer,0,wx.EXPAND|wx.ALL,8)
 
         self.SetSizer( topsizer )

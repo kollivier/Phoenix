@@ -3,7 +3,7 @@
 # Author:      Robin Dunn
 #
 # Created:     04-Jun-2012
-# Copyright:   (c) 2012-2017 by Total Control Software
+# Copyright:   (c) 2012-2020 by Total Control Software
 # License:     wxWindows License
 #---------------------------------------------------------------------------
 
@@ -38,7 +38,7 @@ def run():
     tools.fixWindowClass(c)
 
 
-    # Ignore the old C array verison of the ctor and Create methods, and
+    # Ignore the old C array version of the ctor and Create methods, and
     # fixup the remaining ctor and Create with the typical default values for
     # the args
     c.find('wxOwnerDrawnComboBox').findOverload('wxString choices').ignore()
@@ -52,6 +52,7 @@ def run():
     m.find('value').default = 'wxEmptyString'
     m.find('choices').default = 'wxArrayString()'
 
+    c.find('IsEmpty').ignore()
 
     # Unignore the protected methods that should be overridable in Python
     c.find('OnDrawBackground').ignore(False).isVirtual = True

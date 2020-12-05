@@ -2135,6 +2135,8 @@ class ScaledBitmap(TextObjectMixin, DrawObject):
             self.Image = Bitmap.ConvertToImage()
         elif type(Bitmap) == wx.Image:
             self.Image = Bitmap
+        else:
+            raise ValueError("'Bitmap' must be a wx.Bitmap or wx.Image object not %s" % type(Bitmap))
 
         self.XY = XY
         self.Height = Height
@@ -2333,7 +2335,7 @@ class ScaledBitmap2(TextObjectMixin, DrawObject, ):
             Hb = BBbitmap[1,1] - Yb
 
         FullHeight = ScaleWorldToPixel(self.Height)[0]
-        scale = FullHeight / self.bmpWH[1]
+        scale = float(FullHeight) / float(self.bmpWH[1])
         Ws = int(scale * Wb + 0.5) # add the 0.5 to  round
         Hs = int(scale * Hb + 0.5)
         if (self.ScaledBitmap is None) or (self.ScaledBitmap[0] != (Xb, Yb, Wb, Hb, Ws, Ws) ):

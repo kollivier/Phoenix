@@ -3,7 +3,7 @@
 # Author:      Robin Dunn
 #
 # Created:     3-Nov-2010
-# Copyright:   (c) 2010-2017 by Total Control Software
+# Copyright:   (c) 2010-2020 by Total Control Software
 # License:     wxWindows License
 #---------------------------------------------------------------------------
 
@@ -16,6 +16,7 @@ import etgtools as extractors
 from .generators import textfile_open
 import sys, os
 import copy
+import textwrap
 
 
 PY3 = sys.version_info[0] == 3
@@ -48,6 +49,7 @@ def removeWxPrefixes(node):
            and item.name.startswith('wx') \
            and not item.name.startswith('wxEVT_') \
            and not isinstance(item, (extractors.TypedefDef,
+                                     extractors.ParamDef,
                                      extractors.MethodDef )):  # TODO: Any others?
                 item.pyName = item.name[2:]
                 item.wxDropped = True
@@ -262,17 +264,27 @@ def fixWindowClass(klass, hideVirtuals=True, ignoreProtected=True):
         removeVirtuals(klass)
         addWindowVirtuals(klass)
 
-    if not klass.findItem('GetClassDefaultAttributes'):
-        klass.addItem(extractors.WigCode("""\
-            static wxVisualAttributes
-            GetClassDefaultAttributes(wxWindowVariant variant = wxWINDOW_VARIANT_NORMAL);
-            """))
-
     if not ignoreProtected:
         for item in klass.allItems():
             if isinstance(item, extractors.MethodDef) and item.protection == 'protected':
                 item.ignore(False)
 
+    fixDefaultAttributesMethods(klass)
+
+
+def fixDefaultAttributesMethods(klass):
+    if not klass.findItem('GetClassDefaultAttributes'):
+        m = extractors.MethodDef(
+            type='wxVisualAttributes', name='GetClassDefaultAttributes',
+            isStatic=True, protection='public',
+            items=[extractors.ParamDef(
+                type='wxWindowVariant', name='variant', default='wxWINDOW_VARIANT_NORMAL')]
+        )
+        klass.addItem(m)
+
+    if klass.findItem('GetDefaultAttributes'):
+        klass.find('GetDefaultAttributes').mustHaveApp()
+    klass.find('GetClassDefaultAttributes').mustHaveApp()
 
 
 def fixTopLevelWindowClass(klass, hideVirtuals=True, ignoreProtected=True):
@@ -309,6 +321,8 @@ def fixTopLevelWindowClass(klass, hideVirtuals=True, ignoreProtected=True):
             if isinstance(item, extractors.MethodDef) and item.protection == 'protected':
                 item.ignore(False)
 
+    fixDefaultAttributesMethods(klass)
+
 
 
 def fixSizerClass(klass):
@@ -317,12 +331,11 @@ def fixSizerClass(klass):
     """
     removeVirtuals(klass)
     klass.find('CalcMin').isVirtual = True
-    klass.find('RecalcSizes').isVirtual = True
+    klass.find('RepositionChildren').isVirtual = True
 
-    # in the wxSizer class they are pure-virtual
+    # in the wxSizer class it is pure-virtual
     if klass.name == 'wxSizer':
         klass.find('CalcMin').isPureVirtual = True
-        klass.find('RecalcSizes').isPureVirtual = True
 
 
 def fixBookctrlClass(klass):
@@ -339,6 +352,7 @@ def fixBookctrlClass(klass):
         ("ChangeSelection", "virtual int ChangeSelection(size_t page);"),
         ("HitTest", "virtual int HitTest(const wxPoint& pt, long* flags /Out/ = NULL) const;"),
         ("InsertPage", "virtual bool InsertPage(size_t index, wxWindow * page, const wxString & text, bool select = false, int imageId = NO_IMAGE);"),
+        ("DeleteAllPages", "virtual bool DeleteAllPages();")
         ]
 
     for name, decl in methods:
@@ -382,6 +396,29 @@ def fixRefCountedClass(klass):
         if isinstance(item, extractors.MethodDef) and item.isCtor:
             item.transfer = True
 
+def fixTextClipboardMethods(klass):
+    """
+    Adds virtual behavior to Copy/Cut/Paste/Undo/Redo methods, and their Can*
+    counterparts, of the given class.
+
+    :param ClassDef klass: The class to modify.
+    """
+    for name in ('Cut', 'Copy', 'Paste', 'Undo', 'Redo'):
+        for method in (name, "Can{}".format(name)):
+            try:
+                klass.find(method).isVirtual = True
+            except extractors.ExtractorError:
+                pass
+
+
+def fixDialogProperty(klass):
+    """
+    Fix classes derived from EditorDialogProperty to ensure that their
+    DisplayEditorDialog method is visible.
+    """
+    m = klass.find('DisplayEditorDialog')
+    m.ignore(False)
+    m.find('value').inOut = True
 
 
 def removeVirtuals(klass):
@@ -422,6 +459,7 @@ def addWindowVirtuals(klass):
         ('Destroy',                  'bool Destroy()'),
         ('SetValidator',             'void SetValidator( const wxValidator &validator )'),
         ('GetValidator',             'wxValidator* GetValidator()'),
+        ('EnableVisibleFocus',       'void EnableVisibleFocus(bool enabled)'),
 
         ## What about these?
         #bool HasMultiplePages() const
@@ -485,14 +523,14 @@ def addSipConvertToSubClassCode(klass):
     %ConvertToSubClassCode
         const wxClassInfo* info   = sipCpp->GetClassInfo();
         wxString           name   = info->GetClassName();
-        bool               exists = sipFindType(name) != NULL;
+        bool               exists = sipFindType(name.c_str()) != NULL;
         while (info && !exists) {
             info = info->GetBaseClass1();
             name = info->GetClassName();
-            exists = sipFindType(name) != NULL;
+            exists = sipFindType(name.c_str()) != NULL;
         }
         if (info)
-            sipType = sipFindType(name);
+            sipType = sipFindType(name.c_str());
         else
             sipType = NULL;
     %End
@@ -502,7 +540,7 @@ def addSipConvertToSubClassCode(klass):
 def getEtgFiles(names):
     """
     Create a list of the files from the basenames in the names list that
-    corespond to files in the etg folder.
+    correspond to files in the etg folder.
     """
     return getMatchingFiles(names, 'etg/%s.py')
 
@@ -633,6 +671,36 @@ def checkForUnitTestModule(module):
     print('WARNING: Unittest module (%s) not found!' % pathname)
 
 
+
+def addEnableSystemTheme(klass, klassName):
+    m = extractors.MethodDef(name='EnableSystemTheme', type='void',
+        items=[extractors.ParamDef(type='bool', name='enable', default='true')])
+    m.briefDoc = "Can be used to disable the system theme of controls using it by default."
+    m.detailedDoc = [textwrap.dedent("""\
+        On Windows there an alternative theme available for the list and list-like
+        controls since Windows Vista. This theme is used by Windows Explorer list
+        and tree view and so is arguably more familiar to the users than the standard
+        appearance of these controls. This class automatically uses the new theme,
+        but if that is not desired then this method can be used to turn it off.
+
+        Please note that this method should be called before the widget is
+        actually created, using the 2-phase create pattern. Something like this::
+
+            # This creates the object, but not the window
+            widget = {}()
+
+            # Disable the system theme
+            widget.EnableSystemTheme(False)
+
+            # Now create the window
+            widget.Create(parent, wx.ID_ANY)
+
+        This method has no effect on other platorms
+        """.format(klassName))]
+
+    klass.addItem(m)
+
+
 #---------------------------------------------------------------------------
 
 def addGetIMMethodTemplate(module, klass, fields):
@@ -653,7 +721,7 @@ def addGetIMMethodTemplate(module, klass, fields):
     klass.addPyMethod('GetIM', '(self)',
         doc="""\
             Returns an immutable representation of the ``wx.{name}`` object, based on ``namedtuple``.
-            
+
             This new object is hashable and can be used as a dictionary key,
             be added to sets, etc.  It can be converted back into a real ``wx.{name}``
             with a simple statement like this: ``obj = wx.{name}(imObj)``.
@@ -811,7 +879,8 @@ def convertFourDoublesTemplate(CLASS):
 
 
 def wxListWrapperTemplate(ListClass, ItemClass, module, RealItemClass=None,
-                          includeConvertToType=False, fakeListClassName=None):
+                          includeConvertToType=False, fakeListClassName=None,
+                          header_extra=''):
     if RealItemClass is None:
         RealItemClass = ItemClass
 
@@ -833,6 +902,7 @@ class {ListClass}_iterator /Abstract/
 {{
     // the C++ implementation of this class
     %TypeHeaderCode
+        {header_extra}
         {TypeDef}
         class {ListClass}_iterator {{
         public:
@@ -866,6 +936,7 @@ public:
 class {ListClass}
 {{
     %TypeHeaderCode
+        {header_extra}
         {TypeDef}
     %End
 public:
@@ -874,9 +945,12 @@ public:
         sipRes = sipCpp->size();
     %End
 
-    {ItemClass}* __getitem__(ulong index);
+    {ItemClass}* __getitem__(long index);
     %MethodCode
-        if (index < sipCpp->size()) {{
+        if (0 > index)
+            index += sipCpp->size();
+
+        if (index < sipCpp->size() && (0 <= index)) {{
             {ListClass}::compatibility_iterator node = sipCpp->Item(index);
             if (node)
                 sipRes = ({ItemClass}*)node->GetData();
@@ -989,16 +1063,49 @@ del _{ListClass_pyName}___repr__
 
 
 
-def wxArrayWrapperTemplate(ArrayClass, ItemClass, module, itemIsPtr=False):
+def wxArrayWrapperTemplate(ArrayClass, ItemClass, module, itemIsPtr=False, getItemCopy=False):
     moduleName = module.module
     ArrayClass_pyName = removeWxPrefix(ArrayClass)
     itemRef = '*' if itemIsPtr else '&'
     itemDeref = '' if itemIsPtr else '*'
     addrOf = '' if itemIsPtr else '&'
 
-    # *** TODO: This can probably be done in a way that is not SIP-specfic.
+    # *** TODO: This can probably be done in a way that is not SIP-specific.
     # Try creating extractor objects from scratch and attach cppMethods to
     # them as needed, etc..
+
+    if not getItemCopy:
+        getitemMeth = '''\
+        {ItemClass}{itemRef} __getitem__(long index);
+        %MethodCode
+            if (0 > index)
+                index += sipCpp->GetCount();
+
+            if ((index < sipCpp->GetCount()) && (0 <= index)) {{
+                sipRes = {addrOf}sipCpp->Item(index);
+            }}
+            else {{
+                wxPyErr_SetString(PyExc_IndexError, "sequence index out of range");
+                sipError = sipErrorFail;
+            }}
+        %End
+        '''.format(**locals())
+    else:
+        getitemMeth = '''\
+        {ItemClass}* __getitem__(long index) /Factory/;
+        %MethodCode
+            if (0 > index)
+                index += sipCpp->GetCount();
+            if ((index < sipCpp->GetCount()) && (0 <= index)) {{
+                sipRes = new {ItemClass}(sipCpp->Item(index));
+            }}
+            else {{
+                wxPyErr_SetString(PyExc_IndexError, "sequence index out of range");
+                sipError = sipErrorFail;
+            }}
+        %End
+        '''.format(**locals())
+
 
     return extractors.WigCode('''\
 class {ArrayClass}
@@ -1009,16 +1116,7 @@ public:
         sipRes = sipCpp->GetCount();
     %End
 
-    {ItemClass}{itemRef} __getitem__(ulong index);
-    %MethodCode
-        if (index < sipCpp->GetCount()) {{
-            sipRes = {addrOf}sipCpp->Item(index);
-        }}
-        else {{
-            wxPyErr_SetString(PyExc_IndexError, "sequence index out of range");
-            sipError = sipErrorFail;
-        }}
-    %End
+    {getitemMeth}
 
     int __contains__({ItemClass}{itemRef} obj);
     %MethodCode
@@ -1072,9 +1170,12 @@ public:
         sipRes = sipCpp->GetCount();
     %End
 
-    {ItemClass}* __getitem__(ulong index);
+    {ItemClass}* __getitem__(long index);
     %MethodCode
-        if (index < sipCpp->GetCount()) {{
+        if (0 > index)
+            index += sipCpp->GetCount();
+
+        if ((index < sipCpp->GetCount()) && (0 <= index)) {{
             sipRes = sipCpp->Item(index);
         }}
         else {{
@@ -1218,9 +1319,200 @@ def guessTypeFloat(v):
 def guessTypeStr(v):
     if hasattr(v, 'value') and '"' in v.value:
         return True
-    for t in ['wxString', 'wxChar', 'char*', 'char *']:
+    for t in ['wxString', 'wxChar', 'char*', 'char *', 'wchar_t*', 'wchar_t *']:
         if t in v.type:
             return True
     return False
+
+#---------------------------------------------------------------------------
+# Tweakers to generate C++ stubs for cases where a feature is optional. By
+# generating stubs then we can still provide the wrapper classes but simply
+# have them raise NotImplemented errors or whatnot.
+
+def generateStubs(cppFlag, module, excludes=[], typeValMap={},
+                  extraHdrCode=None, extraCppCode=None):
+    """
+    Generate C++ stubs for all items in the module, except those that are
+    in the optional excludes list.
+    """
+    # First add a define for the cppFlag (like wxUSE_SOME_FEATURE) so the user
+    # code has a way to check if an optional classis available before using it
+    # and getting an exception.
+    assert isinstance(module, extractors.ModuleDef)
+    if not module.findItem(cppFlag):
+        module.addItem(extractors.DefineDef(name=cppFlag, value='0'))
+        excludes.append(cppFlag)
+
+    # Copy incoming typeValMap so it can be updated with some stock types
+    import copy
+    typeValMap = copy.copy(typeValMap)
+    typeValMap.update({
+        'int': '0',
+        'long': '0',
+        'unsigned int': '0',
+        'bool': 'false',
+        'double': '0.0',
+        'wxString': 'wxEmptyString',
+        'const wxString &': 'wxEmptyString',
+        'wxString &': 'wxEmptyString',
+        'wxSize': 'wxDefaultSize',
+        'wxPoint': 'wxDefaultPosition',
+        'wxFileOffset': '0',
+        'wxColour': 'wxNullColour',
+        'wxBitmap': 'wxNullBitmap',
+        'wxBitmap &': 'wxNullBitmap',
+        'wxImage': 'wxNullImage',
+        'wxVisualAttributes': 'wxVisualAttributes()',
+        })
+
+    code = _StubCodeHolder(cppFlag)
+
+    # Next add forward declarations of all classes in case they refer to
+    # each other.
+    for item in module:
+        if isinstance(item, extractors.ClassDef):
+            code.hdr.append('class {};'.format(item.name))
+
+    if extraHdrCode:
+        code.hdr.append(extraHdrCode)
+
+    if extraCppCode:
+        code.cpp.append(extraCppCode)
+
+    # Now write code for all the items in the module.
+    for item in module:
+        if item.name in excludes:
+            continue
+
+        dispatchMap = {
+            extractors.DefineDef    : _generateDefineStub,
+            extractors.GlobalVarDef : _generateGlobalStub,
+            extractors.EnumDef      : _generateEnumStub,
+            extractors.ClassDef     : _generateClassStub,
+            extractors.PyCodeDef    : _ignore,
+            }
+        func = dispatchMap.get(type(item), None)
+        if func is None:
+            print('WARNING: Unable to generate stub for {}, type {}'.format(
+                item.name, type(item)))
+        else:
+            func(code, item, typeValMap)
+
+    # Add the code to the module header
+    module.addHeaderCode(code.renderHdr())
+    if code.cpp:
+        # and possibly the module's C++ file
+        module.addCppCode(code.renderCpp())
+
+
+# A simple class for holding lists of code snippets for the header and
+# possibly the C++ file.
+class _StubCodeHolder:
+    def __init__(self, flag):
+        self.flag = flag
+        self.hdr = []
+        self.cpp = []
+
+    def renderHdr(self):
+        return self.doRender(self.hdr)
+
+    def renderCpp(self):
+        return self.doRender(self.cpp)
+
+    def doRender(self, lst):
+        if not lst:
+            return ''
+        code = ('#if !{}\n'.format(self.flag) +
+                '\n'.join(lst) +
+                '\n#endif //!{}\n'.format(self.flag))
+        return code
+
+
+
+def _ignore(*args):
+    pass
+
+
+def _generateDefineStub(code, define, typeValMap):
+    code.hdr.append('#define {}  {}'.format(define.name, define.value))
+
+
+def _generateGlobalStub(code, glob, typeValMap):
+    code.hdr.append('extern {} {};'.format(glob.type, glob.name))
+    if glob.type == 'const char*':
+        code.cpp.append('{} {} = "";'.format(glob.type, glob.name))
+    else:
+        code.cpp.append('{} {};'.format(glob.type, glob.name))
+
+
+def _generateEnumStub(code, enum, typeValMap):
+    name = '' if enum.name.startswith('@') else enum.name
+    code.hdr.append('\nenum {} {{'.format(name))
+    for item in enum:
+        code.hdr.append('    {},'.format(item.name))
+    code.hdr.append('};')
+
+
+def _generateClassStub(code, klass, typeValMap):
+    if not klass.bases:
+        code.hdr.append('\nclass {} {{'.format(klass.name))
+    else:
+        code.hdr.append('\nclass {} : {} {{'.format(klass.name,
+            ', '.join(['public ' + base for base in klass.bases])))
+    code.hdr.append('public:')
+
+    for item in klass:
+        dispatchMap = {
+            extractors.MethodDef : _generateMethodStub,
+            extractors.WigCode   : lambda c, i, t: None,  # ignore this type
+            }
+        func = dispatchMap.get(type(item), None)
+        if func is None:
+            print('WARNING: Unable to generate stub for {}.{}, type {}'.format(
+                klass.name, item.name, type(item)))
+        else:
+            func(code, item, typeValMap)
+
+    code.hdr.append('};')
+
+
+def _generateMethodStub(code, method, typeValMap):
+    assert isinstance(method, extractors.MethodDef)
+    if method.ignored:
+        return
+    decl = '    '
+    if method.isVirtual:
+        decl += 'virtual '
+    if method.isStatic:
+        decl += 'static '
+    if method.isCtor or method.isDtor:
+        decl += '{}'.format(method.name)
+    else:
+        decl += '{} {}'.format(method.type, method.name)
+    decl += method.argsString
+    if method.isPureVirtual:
+        decl += ';'
+    code.hdr.append(decl)
+
+    if not method.isPureVirtual:
+        impl = '        { '
+        if method.isCtor or method.isStatic:
+            impl += 'wxPyRaiseNotImplemented(); '
+
+        if not (method.isCtor or method.isDtor):
+            if not method.type == 'void':
+                rval = typeValMap.get(method.type, None)
+                if rval is None and '*' in method.type:
+                    rval = 'NULL'
+                if rval is None:
+                    print("WARNING: I don't know how to return a '{}' value.".format(method.type))
+                    rval = '0'
+                impl += 'return {}; '.format(rval)
+
+        impl += '}\n'
+        code.hdr.append(impl)
+
+    for overload in method.overloads:
+        _generateMethodStub(code, overload, typeValMap)
 
 #---------------------------------------------------------------------------

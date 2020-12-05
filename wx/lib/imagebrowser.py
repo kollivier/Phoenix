@@ -98,13 +98,13 @@ _ = wx.GetTranslation
 #---------------------------------------------------------------------------
 
 BAD_IMAGE = -1
-ID_WHITE_BG = wx.NewId()
-ID_BLACK_BG = wx.NewId()
-ID_GREY_BG = wx.NewId()
-ID_CHECK_BG = wx.NewId()
-ID_NO_FRAME = wx.NewId()
-ID_BOX_FRAME = wx.NewId()
-ID_CROP_FRAME = wx.NewId()
+ID_WHITE_BG = wx.NewIdRef()
+ID_BLACK_BG = wx.NewIdRef()
+ID_GREY_BG = wx.NewIdRef()
+ID_CHECK_BG = wx.NewIdRef()
+ID_NO_FRAME = wx.NewIdRef()
+ID_BOX_FRAME = wx.NewIdRef()
+ID_CROP_FRAME = wx.NewIdRef()
 
 def ConvertBMP(file_nm):
     """
@@ -463,7 +463,7 @@ class ImageDialog(wx.Dialog):
         self.set_dir = os.getcwd()
         self.set_file = None
 
-        if set_dir != None:
+        if set_dir is not None:
             if os.path.exists(set_dir):     # set to working directory if nothing set
                 self.set_dir = set_dir
 
@@ -780,7 +780,7 @@ class FindFiles:
             path = path.upper()
             value = i.upper()
 
-            if pattern.match(value) != None:
+            if pattern.match(value) is not None:
                 filelist.append(i)
 
 

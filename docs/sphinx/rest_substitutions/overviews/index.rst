@@ -29,12 +29,25 @@ and launch the wxPython demo for you.
 
 .. raw:: html
 
-     <h2>API Modules</h2>
+     <h2>Sections</h2>
+
+     <table class="contentstable" align="center" style="margin-left: 25px">
+       <tr><td>
+         <p class="mybiglink"><a class="mybiglink" href="Overviews.html">wx Overview Documents</a><br/>
+            <span class="linkdescr">A collection of overview and how-to documents about various wx topics. </span></p>
+
+         <p class="mybiglink"><a class="mybiglink" href="wx.functions.html">wx functions</a><br/>
+            <span class="linkdescr">The index of top-level functions available in the wx package. </span></p>
+
+       </td></tr>
+      </table>
+
+     <h3>Modules</h3>
 
      <table class="contentstable" align="center" style="margin-left: 25px">
        <tr>
        <td width="50%" valign="top">
-         <p class="mybiglink"><a class="mybiglink" href="wx.1moduleindex.html">wx Core</a><br/>
+         <p class="mybiglink"><a class="mybiglink" href="wx.1moduleindex.html">wx</a><br/>
             <span class="linkdescr">The classes which appear in the main wx namespace</span></p>
 
          <p class="mybiglink"><a class="mybiglink" href="wx.adv.1moduleindex.html">wx.adv</a><br/>
@@ -50,7 +63,7 @@ and launch the wxPython demo for you.
             <span class="linkdescr">A generic, ground-up implementation of a text control capable of showing multiple text styles and images.</span></p>
 
          <p class="mybiglink"><a class="mybiglink" href="wx.ribbon.1moduleindex.html">wx.ribbon</a><br/>
-            <span class="linkdescr">A set of classes for writing a ribbon-based UI, typically a combonation of tabs and toolbar, similar to the UI in MS Office and Windows 10.</span></p>
+            <span class="linkdescr">A set of classes for writing a ribbon-based UI, typically a combination of tabs and toolbar, similar to the UI in MS Office and Windows 10.</span></p>
 
          <p class="mybiglink"><a class="mybiglink" href="wx.html.1moduleindex.html">wx.html</a><br/>
             <span class="linkdescr">Widget and supporting classes for a generic html renderer</span></p>
@@ -61,6 +74,8 @@ and launch the wxPython demo for you.
          <p class="mybiglink"><a class="mybiglink" href="wx.aui.1moduleindex.html">wx.aui</a><br/>
             <span class="linkdescr">Docking/floating window panes, draggable notebook tabs, etc.</span></p>
 
+         <p class="mybiglink"><a class="mybiglink" href="wx.svg.html">wx.svg</a><br/>
+            <span class="linkdescr">Classes to parse and render Scalable Vector Graphics files.</span></p>
 
        </td>
        <td valign="top" width="50%" style="margin-left: 5px">
@@ -82,7 +97,7 @@ and launch the wxPython demo for you.
          <p class="mybiglink"><a class="mybiglink" href="wx.propgrid.1moduleindex.html">wx.propgrid</a><br/>
             <span class="linkdescr">PropertyGrid and related classes for editing a grid of name/value pairs. </span></p>
 
-         <p class="mybiglink"><a class="mybiglink" href="wx.xrc.1moduleindex,html">wx.xrc</a><br/>
+         <p class="mybiglink"><a class="mybiglink" href="wx.xrc.1moduleindex.html">wx.xrc</a><br/>
             <span class="linkdescr">Classes for loading widgets and layout from XML</span></p>
 
          <p class="mybiglink"><a class="mybiglink" href="wx.xml.1moduleindex.html">wx.xml</a><br/>
@@ -93,6 +108,9 @@ and launch the wxPython demo for you.
 
          <p class="mybiglink"><a class="mybiglink" href="wx.tools.html">wx.tools</a><br/>
             <span class="linkdescr">Some useful tools and utilities for wxPython.</span></p>
+
+         <p class="mybiglink"><a class="mybiglink" href="wx.functions.html">functions</a><br/>
+            <span class="linkdescr">Top-level functions in the wx package.</span></p>
 
        </td></tr>
      </table>
@@ -106,47 +124,10 @@ and launch the wxPython demo for you.
    :glob:
 
    MigrationGuide
-   TODO
    DocstringsGuidelines
+   Overviews
    wx.functions
    wx.1moduleindex
-   app_overview
-   bitmap_overview
-   bookctrl_overview
-   command_overview
-   common_dialogs_overview
-   config_overview
-   dataobject_overview
-   datetime_overview
-   dc_overview
-   dialog_overview
-   dnd_overview
-   events_overview
-   filesystem_overview
-   font_encodings
-   font_overview
-   grid_overview
-   html_overview
-   internationalization
-   writing_non_english_applications
-   listctrl_overview
-   log_classes_overview
-   printing_framework_overview
-   refcount_overview
-   richtextctrl_overview
-   scrolling_overview
-   sizers_overview
-   splitterwindow_overview
-   standard_event_identifiers
-   stock_items
-   tipprovider_overview
-   toolbar_overview
-   treectrl_overview
-   validator_overview
-   window_deletion_overview
-   window_ids_overview
-   window_sizing_overview
-   window_styles_overview
    wx.adv.1moduleindex
    wx.adv.functions
    wx.dataview.1moduleindex
@@ -170,3 +151,4 @@ and launch the wxPython demo for you.
    wx.lib
    wx.py
    wx.tools
+   wx.svg

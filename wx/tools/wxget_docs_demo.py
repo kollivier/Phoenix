@@ -7,7 +7,7 @@
 # Author:      Steve Barnes
 #
 # Created:     06-Aug-2017
-# Copyright:   (c) 2017 by Steve Barnes
+# Copyright:   (c) 2017-2020 by Steve Barnes
 # Licence:     wxWindows license
 # Tags:        phoenix-port, py3-port
 #
@@ -23,6 +23,8 @@ Usage:
 
 Will install if missing, the requested item for the current version and then
 launch it.
+
+Use: doc|demo --force to force a fresh download.
 """
 from __future__ import (division, absolute_import, print_function, unicode_literals)
 
@@ -43,8 +45,8 @@ else:
     from urllib import pathname2url
 
 import wx
+from wx.tools import wxget
 
-import wxget
 print(sys.version_info, sys.version, sys.argv)
 APP = None
 if wx.VERSION[0] != 4:
@@ -81,22 +83,22 @@ def get_paths_dict():
 def unpack_cached(cached, dest_dir):
     """ Unpack from the cache."""
     print('Unpack', cached, 'to', dest_dir)
-    tf = tarfile.open(cached, "r:*")
-    tf.extractall(dest_dir)
+    with tarfile.open(cached, "r:*") as tf:
+        tf.extractall(dest_dir)
     dest_dir = os.listdir(dest_dir)[0]
     return dest_dir
 
-def get_item(final, url, cache, name, ext):
+def get_item(final, url, cache, name, ext, forced=False):
     """ Get the item """
     print('Looking for', name, 'at', final)
     fullpath = os.path.join(final, name)
-    if os.path.exists(fullpath):  # Already exists
+    if os.path.exists(fullpath) and not forced:  # Already exists
         return fullpath
 
     cached = os.path.join(cache, name)
     cached = os.path.extsep.join([cached, ext])
     print('Looking for cached', cached)
-    if not os.path.exists(cached):  # No cached copy
+    if not os.path.exists(cached) or forced:  # No cached copy
         yes_no = wx.MessageBox(
             "\n".join(
                 ["%s is not yet installed." % name,
@@ -104,7 +106,7 @@ def get_item(final, url, cache, name, ext):
                  "(Select No on charged or slow connections)"]),
             "Download Prompt", wx.YES_NO|wx.CENTER|wx.ICON_INFORMATION)
         if yes_no == wx.YES:
-            cached = wxget.download_file(url, cache, True)
+            cached = wxget.download_file(url, cache, force=forced, trusted=True)
         else:
             report_error("Download Cancelled!")
 
@@ -138,7 +140,7 @@ def docs_main(args=sys.argv):
     print("Launch Docs for wxPython V%s" % wx.VERSION_STRING)
     pd = get_paths_dict()
     location = get_item(pd['wxDocs'], pd['Docs_URL'], pd['Cache'],
-                        pd['Docs_Name'], pd['Ext'])
+                        pd['Docs_Name'], pd['Ext'], forced="--force" in args)
     if location:
         location = os.path.join(location, 'docs', 'html', 'index.html')
         location_url = urlparse.urljoin('file:', pathname2url(location))
@@ -156,7 +158,7 @@ def demo_main(args=sys.argv):
     print("Launch Demo for wxPython V%s" % wx.VERSION_STRING)
     pd = get_paths_dict()
     location = get_item(pd['wxDemo'], pd['Demo_URL'], pd['Cache'],
-                        pd['Demo_Name'], pd['Ext'])
+                        pd['Demo_Name'], pd['Ext'], forced="--force" in args)
     if location:
         cmds = [sys.executable, os.path.join(location, "demo", "demo.py")]
         print("Launching", cmds[1])

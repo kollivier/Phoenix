@@ -5,12 +5,13 @@
 # Author:      Robin Dunn
 #
 # Created:     3-Nov-2010
-# Copyright:   (c) 2010-2017 by Total Control Software
+# Copyright:   (c) 2010-2020 by Total Control Software
 # License:     wxWindows License
 #----------------------------------------------------------------------
 
 import sys, os
 import glob
+import stat
 
 from setuptools                     import setup, find_packages
 from distutils.command.build        import build as orig_build
@@ -38,7 +39,7 @@ DESCRIPTION      = "Cross platform GUI toolkit for Python, \"Phoenix\" version"
 AUTHOR           = "Robin Dunn"
 AUTHOR_EMAIL     = "robin@alldunn.com"
 URL              = "http://wxPython.org/"
-DOWNLOAD_URL     = "https://pypi.python.org/pypi/{}".format(NAME)
+DOWNLOAD_URL     = "https://pypi.org/project/{}".format(NAME)
 LICENSE          = "wxWindows Library License (https://opensource.org/licenses/wxwindows.php)"
 PLATFORMS        = "WIN32,WIN64,OSX,POSIX"
 KEYWORDS         = "GUI,wx,wxWindows,wxWidgets,cross-platform,user-interface,awesome"
@@ -64,14 +65,13 @@ samples, and also a set of MSVC .pdb files for Windows are available
 
 The utility tools wxdocs and wxdemo will download the appropriate files with wxget,
 (if necessary), unpack them, (if necessary) and launch the appropriate version of
-the respective items. (Documents are launched in the default browser and demo is started 
+the respective items. (Documents are launched in the default browser and demo is started
 with python).
 """.format(version=cfg.VERSION, docs_base=DOCS_BASE)
 
 
-
 CLASSIFIERS      = """\
-Development Status :: 4 - Beta
+Development Status :: 6 - Mature
 Environment :: MacOS X :: Cocoa
 Environment :: Win32 (MS Windows)
 Environment :: X11 Applications :: GTK
@@ -81,16 +81,18 @@ Operating System :: MacOS :: MacOS X
 Operating System :: Microsoft :: Windows :: Windows 7
 Operating System :: Microsoft :: Windows :: Windows 10
 Operating System :: POSIX
-Programming Language :: Python :: 2.7
-Programming Language :: Python :: 3.4
-Programming Language :: Python :: 3.5
 Programming Language :: Python :: 3.6
+Programming Language :: Python :: 3.7
+Programming Language :: Python :: 3.8
+Programming Language :: Python :: 3.9
 Programming Language :: Python :: Implementation :: CPython
 Topic :: Software Development :: User Interfaces
 """
 
-DEPENDENCIES = [ 'six',
-                 ]
+with open('requirements/install.txt') as fid:
+    INSTALL_REQUIRES = [line.strip()
+                        for line in fid.readlines()
+                        if not line.startswith('#')]
 
 isWindows = sys.platform.startswith('win')
 isDarwin = sys.platform == "darwin"
@@ -306,6 +308,16 @@ orig_copy_tree = distutils.dir_util.copy_tree
 distutils.dir_util.copy_tree = wx_copy_tree
 
 
+# Monkey-patch make_writeable too. Sometimes the link is copied before the
+# target, and the original make_writable will fail on a link to a missing
+# target.
+def wx_make_writable(target):
+    if not os.path.islink(target):
+        os.chmod(target, os.stat(target).st_mode | stat.S_IWRITE)
+
+import setuptools.command.build_py
+setuptools.command.build_py.make_writable = wx_make_writable
+
 
 #----------------------------------------------------------------------
 
@@ -318,7 +330,7 @@ ENTRY_POINTS = {
         "img2xpm = wx.tools.img2xpm:main",
         "pywxrc = wx.tools.pywxrc:main",
 #        ],
-#    'gui_scripts' : [  # TODO: Why was this done?
+#    'gui_scripts' : [  # TODO: Why was this commented out?
         "wxget = wx.tools.wxget:main",  # New wx wget
         "wxdocs = wx.tools.wxget_docs_demo:docs_main",  # Get/Launch Docs
         "wxdemo = wx.tools.wxget_docs_demo:demo_main",  # Get/Launch Demo
@@ -355,7 +367,7 @@ if __name__ == '__main__':
           platforms        = PLATFORMS,
           classifiers      = [c for c in CLASSIFIERS.split("\n") if c],
           keywords         = KEYWORDS,
-          install_requires = DEPENDENCIES,
+          install_requires = INSTALL_REQUIRES,
           zip_safe         = False,
           use_2to3         = False,
           include_package_data = True,

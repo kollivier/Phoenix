@@ -3,7 +3,7 @@
 # Author:      Robin Dunn
 #
 # Created:     27-Nov-2010
-# Copyright:   (c) 2010-2017 by Total Control Software
+# Copyright:   (c) 2010-2020 by Total Control Software
 # License:     wxWindows License
 #---------------------------------------------------------------------------
 
@@ -34,6 +34,29 @@ def run():
     #-----------------------------------------------------------------
     # Tweak the parsed meta objects in the module object as needed for
     # customizing the generated code and docstrings.
+
+    c = module.find('wxVisualAttributes')
+    assert isinstance(c, etgtools.ClassDef)
+    # Mark the structure members as read-only, and make copies of the values
+    # when fetching them. This is to protect against cases where the
+    # VisualAttributes object is transient and may be GC'd while we still are
+    # using a reference to a C++ member value.
+    c.find('colBg').noSetter = True
+    c.find('colBg').getCode = """\
+        wxColour* clr = new wxColour(sipCpp->colBg);
+        sipPy = wxPyConstructObject((void*)clr, "wxColour", true);
+    """
+    c.find('colFg').noSetter = True
+    c.find('colFg').getCode = """\
+        wxColour* clr = new wxColour(sipCpp->colFg);
+        sipPy = wxPyConstructObject((void*)clr, "wxColour", true);
+    """
+    c.find('font').noSetter = True
+    c.find('font').getCode = """\
+        wxFont* font = new wxFont(sipCpp->font);
+        sipPy = wxPyConstructObject((void*)font, "wxFont", true);
+    """
+
 
     c = module.find('wxWindow')
     assert isinstance(c, etgtools.ClassDef)
@@ -97,12 +120,20 @@ def run():
     c.addPyMethod('SetClientRect', '(self, rect)', 'return self.SetClientSize(rect)')
     c.addPyProperty('ClientRect GetClientRect SetClientRect')
 
-    m = c.find('GetTextExtent').findOverload('int *')
-    m.pyName = 'GetFullTextExtent'
-    m.find('w').out = True
-    m.find('h').out = True
-    m.find('descent').out = True
-    m.find('externalLeading').out = True
+    # Split the overloaded GetTextExtent into two distinct methods, because the
+    # resulting method signatures are not different enough from the Python
+    # perspective.
+    m1 = c.find('GetTextExtent') #.findOverload('int *')
+    assert len(m1.overloads) == 1
+    m2 = m1.overloads.pop()
+    c.insertItemAfter(m1, m2)
+
+    # Now do the needed tweaks for the full GetFullTextExtent
+    m1.pyName = 'GetFullTextExtent'
+    m1.find('w').out = True
+    m1.find('h').out = True
+    m1.find('descent').out = True
+    m1.find('externalLeading').out = True
 
     c.find('GetHandle').type = 'wxUIntPtr*'
     c.find('GetHandle').setCppCode("return new wxUIntPtr(wxPyGetWinHandle(self));")
@@ -210,9 +241,24 @@ def run():
             """)
 
 
-    # MSW only.  Do we want them wrapped?
-    c.find('GetAccessible').ignore()
-    c.find('SetAccessible').ignore()
+    # wxAccessbile is MSW only. Provide a NotImplemented fallback for the
+    # other platforms.
+    c.find('GetAccessible').setCppCode("""\
+        #if wxUSE_ACCESSIBILITY
+            return self->GetAccessible();
+        #else
+            wxPyRaiseNotImplemented();
+            return NULL;
+        #endif
+        """)
+    c.find('SetAccessible.accessible').transfer = True
+    c.find('SetAccessible').setCppCode("""\
+        #if wxUSE_ACCESSIBILITY
+            self->SetAccessible(accessible);
+        #else
+            wxPyRaiseNotImplemented();
+        #endif
+        """)
 
     # Make some of the protected methods visible and overridable from Python
     c.find('SendDestroyEvent').ignore(False)
@@ -371,7 +417,7 @@ def run():
         def DLG_UNIT(win, dlg_unit, val2=None):
             """
             Convenience function for converting a wx.Point, wx.Size or
-            (x,y) in dialog units to pixels, using the given window as a 
+            (x,y) in dialog units to pixels, using the given window as a
             reference.
             """
             if val2 is not None:

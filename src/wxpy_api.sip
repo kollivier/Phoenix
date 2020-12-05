@@ -6,13 +6,13 @@
 // Author:      Robin Dunn
 //
 // Created:     19-Nov-2010
-// Copyright:   (c) 2010-2017 by Total Control Software
+// Copyright:   (c) 2010-2020 by Total Control Software
 // Licence:     wxWindows license
 //--------------------------------------------------------------------------
 
 
 %ModuleHeaderCode
-#include "wxpy_api.h"
+#include <wxPython/wxpy_api.h>
 %End
 
 //--------------------------------------------------------------------------
@@ -30,8 +30,9 @@
 static wxString i_Py2wxString(PyObject* source)
 {
 #if wxUSE_UNICODE_WCHAR == 0
-#error wxString converison can only handle WCHAR wxStrings currently
+#error wxString conversion can only handle WCHAR wxStrings currently
 #endif
+    PyErr_Clear();
     PyObject* uni = source;
     if (PyBytes_Check(source)) {
         // if it's a string object convert it to unicode first, assumes utf-8
@@ -110,7 +111,7 @@ static PyObject* i_wxPyConstructObject(void* ptr,
     if (pos != wxNOT_FOUND)
         name = name.Mid(pos + nsDelimiter.Len());
 
-    const sipTypeDef* td = sipFindType(name);
+    const sipTypeDef* td = sipFindType(name.c_str());
     if (!td)
         return NULL;
     PyObject* transferObj = setThisOwn ? Py_None : NULL;
@@ -128,7 +129,7 @@ static bool i_wxPyWrappedPtr_Check(PyObject* obj)
 // Check if a PyObject is a specific wrapped class or subclass
 static bool i_wxPyWrappedPtr_TypeCheck(PyObject* obj, const wxString& className)
 {
-    const sipTypeDef* td = sipFindType(className);
+    const sipTypeDef* td = sipFindType(className.c_str());
     if (!td)
         return false;
     return sipCanConvertToType(obj, td, SIP_NO_CONVERTORS);
@@ -138,7 +139,7 @@ static bool i_wxPyWrappedPtr_TypeCheck(PyObject* obj, const wxString& className)
 // Convert a wrapped SIP object to its C++ pointer, ensuring that it is of the expected type
 static bool i_wxPyConvertWrappedPtr(PyObject* obj, void **ptr, const wxString& className)
 {
-    const sipTypeDef* td = sipFindType(className);
+    const sipTypeDef* td = sipFindType(className.c_str());
     if (!td)
         return false;
     if (! sipCanConvertToType(obj, td, SIP_NO_CONVERTORS))
@@ -283,6 +284,8 @@ wxVariant i_wxVariant_in_helper(PyObject* obj)
 {
     wxVariant value;
 
+    PyErr_Clear();
+
     if (PyBytes_Check(obj) || PyUnicode_Check(obj))
         value = Py2wxString(obj);
 
@@ -336,7 +339,7 @@ wxVariant i_wxVariant_in_helper(PyObject* obj)
         value << *ptr;
     }
 
-    else if (sipCanConvertToType(obj, sipType_wxArrayString, 0)) {
+    else if (wxPyCheckStringSequence(obj)) {
         wxArrayString* ptr;
         int state = 0;
         int isErr = 0;
@@ -375,6 +378,12 @@ PyObject* i_wxVariant_out_helper(const wxVariant& value)
 
     else if (value.IsType("long"))
         obj = PyLong_FromLong(value.GetLong());
+
+    else if (value.IsType("longlong"))
+        obj = PyLong_FromLongLong(value.GetLongLong().GetValue());
+
+    else if (value.IsType("ulonglong"))
+        obj = PyLong_FromUnsignedLongLong(value.GetULongLong().GetValue());
 
     else if (value.IsType("double"))
         obj = PyFloat_FromDouble(value.GetDouble());
@@ -436,7 +445,7 @@ PyObject* i_wxVariant_out_helper(const wxVariant& value)
 PyObject* wxPyNoAppError = NULL;
 
 bool i_wxPyCheckForApp(bool raiseException) {
-    if (wxTheApp != NULL)
+    if (wxApp::GetInstance() != NULL)
         return true;
     else {
         if (raiseException)
@@ -449,13 +458,18 @@ bool i_wxPyCheckForApp(bool raiseException) {
 // Make a memory view object from a C buffer and size.
 
 PyObject* i_wxPyMakeBuffer(void* ptr, Py_ssize_t len, bool readOnly=false) {
-    // GIL should already be held
-    Py_buffer view;
-    int flags = PyBUF_FORMAT|PyBUF_ND;
-    if (!readOnly)
-        flags |= PyBUF_WRITABLE;
-    PyBuffer_FillInfo(&view, NULL, ptr, len, readOnly ? 1:0, flags);
-    return PyMemoryView_FromBuffer(&view);
+    wxPyThreadBlocker blocker;
+    if (ptr && len) {
+        Py_buffer view;
+        int flags = PyBUF_FORMAT|PyBUF_ND;
+        if (!readOnly)
+            flags |= PyBUF_WRITABLE;
+        PyBuffer_FillInfo(&view, NULL, ptr, len, readOnly ? 1:0, flags);
+        return PyMemoryView_FromBuffer(&view);
+    } else {
+        Py_INCREF(Py_None); return Py_None;
+        // return PyBytes_FromString("");    TODO: None or an empty string?
+    }
 
 //    // TODO: Consider using a sip.array object instead, like this:
 //    // Create a sip.array of bytes, and then convert to a memoryview which is
@@ -477,6 +491,9 @@ bool i_wxPyNumberSequenceCheck(PyObject* obj, int reqLength=-1) {
     // Used in the various places where a sequence of numbers can be converted
     // to a wx type, like wxPoint, wxSize, wxColour, etc. Returns true if the
     // object is a Tuple, List or numpy Array of the proper length.
+
+    // See also i_wxPyCheckNumberSequence below which can be used in more
+    // general purpose situations and for sequences of any length.
 
     // tuples or lists are easy
     bool isFast = (PyTuple_Check(obj) || PyList_Check(obj));
@@ -541,10 +558,22 @@ inline PyObject* i_wxPyMethod_Self(PyObject* method) {
 
 void i_wxPyReinitializeModules() {
     if (i_wxPyCheckForApp(false)) {
-        wxModule::CleanUpModules();
+        // NOTE: We are intentionally NOT calling wxModule::CleanUpModules
+        // here because that could clear some things that will not be reset
+        // when used again, leading to crashes. For example, in
+        // wxMSWDCImpl::DoGradientFillLinear it is saving a pointer to an API
+        // function in a dyn-loaded DLL. When modules are cleaned up then that
+        // DLL will be unloaded, leaving a dangling function pointer.  We'll
+        // likely end up with multiple instances of some things, but that is
+        // better than the alternaive currently.
+        //wxModule::CleanUpModules();
+
         wxModule::RegisterModules();
         wxModule::InitializeModules();
-        wxInitAllImageHandlers();
+
+        // And since we're not calling CleanUpModules there is no longer any
+        // need to re-init the image handlers.
+        //wxInitAllImageHandlers();
     }
 }
 
@@ -576,7 +605,45 @@ wxDateTime* i_wxPyDate_ToWxDateTime(PyObject *obj) {
                           PyDateTime_GET_YEAR(obj));
 }
 
+//--------------------------------------------------------------------------
 
+bool i_wxPyCheckNumberSequence(PyObject *obj)
+{
+    if (PySequence_Check(obj) &&
+            !(PyBytes_Check(obj) || PyUnicode_Check(obj))) {
+
+        Py_ssize_t i, len = PySequence_Length(obj);
+        bool failed;
+        for (i=0; i<len; i++) {
+            PyObject* item = PySequence_GetItem(obj, i);
+            failed = !PyNumber_Check(item);
+            Py_DECREF(item);
+            if (failed)
+                return false;
+        }
+        return true;
+    }
+    return false;
+}
+
+bool i_wxPyCheckStringSequence(PyObject *obj)
+{
+    if (PySequence_Check(obj) &&
+            !(PyBytes_Check(obj) || PyUnicode_Check(obj))) {
+
+        Py_ssize_t i, len = PySequence_Length(obj);
+        bool failed;
+        for (i=0; i<len; i++) {
+            PyObject* item = PySequence_GetItem(obj, i);
+            failed = !PyBytes_Check(item) && !PyUnicode_Check(item);
+            Py_DECREF(item);
+            if (failed)
+                return false;
+        }
+        return true;
+    }
+    return false;
+}
 
 //--------------------------------------------------------------------------
 // An instance of the API structure
@@ -601,7 +668,9 @@ static wxPyAPI  API = {
     i_wxPyDateTime_Check,
     i_wxPyDate_Check,
     i_wxPyDateTime_ToWxDateTime,
-    i_wxPyDate_ToWxDateTime
+    i_wxPyDate_ToWxDateTime,
+    i_wxPyCheckNumberSequence,
+    i_wxPyCheckStringSequence
 };
 %End
 

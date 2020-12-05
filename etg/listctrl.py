@@ -3,7 +3,7 @@
 # Author:      Robin Dunn
 #
 # Created:     23-Mar-2012
-# Copyright:   (c) 2012-2017 by Total Control Software
+# Copyright:   (c) 2012-2020 by Total Control Software
 # License:     wxWindows License
 #---------------------------------------------------------------------------
 
@@ -17,7 +17,7 @@ DOCSTRING = ""
 
 # The classes and/or the basename of the Doxygen XML files to be processed by
 # this script.
-ITEMS  = [ "wxListItemAttr",
+ITEMS  = [ "wxItemAttr",  # TODO: technically this should be in its own etg script...
            "wxListItem",
            "wxListCtrl",
            "wxListView",
@@ -35,6 +35,10 @@ def run():
     # Tweak the parsed meta objects in the module object as needed for
     # customizing the generated code and docstrings.
 
+    # Compatibility alias
+    module.addPyCode("""\
+        ListItemAttr = wx.deprecated(ItemAttr, 'Use ItemAttr instead')
+        """)
 
     #-------------------------------------------------------
     c = module.find('wxListItem')
@@ -54,10 +58,13 @@ def run():
                   #'OnGetItemColumnAttr',  # MSW only?
                   'OnGetItemColumnImage',
                   'OnGetItemImage',
-                  'OnGetItemText']:
+                  'OnGetItemText',
+                  'OnGetItemIsChecked',
+                  ]:
         c.find(name).ignore(False)
         c.find(name).isVirtual = True
 
+    tools.addEnableSystemTheme(c, 'wx.ListCtrl')
 
     # Tweaks to allow passing and using a Python callable object for the sort
     # compare function. First provide a sort callback function that can call the
@@ -102,22 +109,6 @@ def run():
     # instead of a wxUIntPtr.
     c.find('GetItemData').type = 'long'
     c.find('SetItemPtrData').ignore()
-
-    # Monkey-patch SetItemData to ensure the data value isn't too big. It's
-    # limited to a C long...
-    orig = c.find('SetItemData')
-    orig.pyName = '_SetItemData'
-    orig.docsignored = True
-
-    c.addPyMethod('SetItemData', '(self, item, data)',
-        doc="Associates an application-defined data value with this item.",
-        body="""\
-            from wx._core import _LONG_MIN, _LONG_MAX
-            if data < _LONG_MIN or data > _LONG_MAX:
-                raise OverflowError("Values limited to what can be held in a C long.")
-            return self._SetItemData(item, data)
-            """)
-
 
 
     # Change the semantics of GetColumn to return the item as the return
@@ -206,6 +197,7 @@ def run():
             return rv;
             """)
 
+    c.find('CheckItem.check').default = 'true'
 
 
     # Some deprecated aliases for Classic renames
@@ -217,7 +209,7 @@ def run():
     c.addPyCode('ListCtrl.SetStringItem = wx.deprecated(ListCtrl.SetItem, "Use SetItem instead.")')
 
 
-    # Provide a way to determine if column ordering is possble
+    # Provide a way to determine if column ordering is possible
     c.addCppMethod('bool', 'HasColumnOrderSupport', '()',
         """\
         #ifdef wxHAS_LISTCTRL_COLUMN_ORDER
@@ -325,8 +317,7 @@ def run():
         body="""\
         if len(entry):
             from six import text_type
-            pos = self.GetItemCount()
-            self.InsertItem(pos, text_type(entry[0]))
+            pos = self.InsertItem(self.GetItemCount(), text_type(entry[0]))
             for i in range(1, len(entry)):
                 self.SetItem(pos, i, text_type(entry[i]))
             return pos
@@ -351,7 +342,7 @@ def run():
     c = module.find('wxListEvent')
     tools.fixEventClass(c)
 
-    c.addPyCode("""\
+    module.addPyCode("""\
         EVT_LIST_BEGIN_DRAG        = PyEventBinder(wxEVT_LIST_BEGIN_DRAG       , 1)
         EVT_LIST_BEGIN_RDRAG       = PyEventBinder(wxEVT_LIST_BEGIN_RDRAG      , 1)
         EVT_LIST_BEGIN_LABEL_EDIT  = PyEventBinder(wxEVT_LIST_BEGIN_LABEL_EDIT , 1)
@@ -372,6 +363,8 @@ def run():
         EVT_LIST_COL_DRAGGING      = PyEventBinder(wxEVT_LIST_COL_DRAGGING     , 1)
         EVT_LIST_COL_END_DRAG      = PyEventBinder(wxEVT_LIST_COL_END_DRAG     , 1)
         EVT_LIST_ITEM_FOCUSED      = PyEventBinder(wxEVT_LIST_ITEM_FOCUSED     , 1)
+        EVT_LIST_ITEM_CHECKED      = PyEventBinder(wxEVT_LIST_ITEM_CHECKED     , 1)
+        EVT_LIST_ITEM_UNCHECKED    = PyEventBinder(wxEVT_LIST_ITEM_UNCHECKED   , 1)
 
         # deprecated wxEVT aliases
         wxEVT_COMMAND_LIST_BEGIN_DRAG         = wxEVT_LIST_BEGIN_DRAG
@@ -404,4 +397,3 @@ def run():
 #---------------------------------------------------------------------------
 if __name__ == '__main__':
     run()
-

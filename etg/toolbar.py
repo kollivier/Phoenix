@@ -3,7 +3,7 @@
 # Author:      Robin Dunn
 #
 # Created:     07-Mar-2012
-# Copyright:   (c) 2012-2017 by Total Control Software
+# Copyright:   (c) 2012-2020 by Total Control Software
 # License:     wxWindows License
 #---------------------------------------------------------------------------
 
@@ -65,13 +65,14 @@ def run():
     gcd.type = 'wxPyUserData*'
     gcd.setCppCode('return dynamic_cast<wxPyUserData*>(self->GetClientData());')
 
+    c.find('SetDropdownMenu.menu').transfer = True
 
 
     #---------------------------------------------
     c = module.find('wxToolBar')
     tools.fixWindowClass(c)
+    tools.ignoreConstOverloads(c)
     _fixClientData(c)
-    c.find('SetBitmapResource').ignore()
     module.addGlobalStr('wxToolBarNameStr', c)
 
     gcd = c.find('GetToolClientData')
@@ -95,6 +96,8 @@ def run():
     c.find('OnMouseEnter').ignore()
     c.find('OnRightClick').ignore()
     c.find('OnLeftClick').ignore()
+
+    c.find('SetDropdownMenu.menu').transfer = True
 
 
     # Add some deprecated methods to aid with Classic compatibility.

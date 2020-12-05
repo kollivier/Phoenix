@@ -3,8 +3,8 @@
 # Inspired By And Heavily Based On wxGenericTreeCtrl.
 #
 # Andrea Gavana, @ 17 May 2006
-# Latest Revision: 09 Jan 2014, 23.00 GMT
-#
+# Latest Revision: 02 Jul 2018, 00.10 GMT
+# Modified by Helio Guilherme, @ 26 Apr 2018
 #
 # TODO List
 #
@@ -299,14 +299,14 @@ License And Version
 
 :class:`CustomTreeCtrl` is distributed under the wxPython license.
 
-Latest Revision: Andrea Gavana @ 09 Jan 2014, 23.00 GMT
+Latest Revision: Helio Guilherme @ 09 Aug 2018, 21.35 GMT
 
-Version 2.6
+Version 2.7
 
 """
 
 # Version Info
-__version__ = "2.6"
+__version__ = "2.7"
 
 import wx
 from wx.lib.expando import ExpandoTextCtrl
@@ -857,7 +857,7 @@ class TreeItemAttr(object):
         :param `colText`: an instance of :class:`wx.Colour`.
         """
 
-        self._colText = colText
+        self._colText = wx.Colour(colText)
 
 
     def SetBackgroundColour(self, colBack):
@@ -867,7 +867,7 @@ class TreeItemAttr(object):
         :param `colBack`: an instance of :class:`wx.Colour`.
         """
 
-        self._colBack = colBack
+        self._colBack = wx.Colour(colBack)
 
 
     def SetBorderColour(self, colBorder):
@@ -879,7 +879,7 @@ class TreeItemAttr(object):
         .. versionadded:: 0.9.6
         """
 
-        self._colBorder = colBorder
+        self._colBorder = wx.Colour(colBorder)
 
 
     def SetFont(self, font):
@@ -1554,7 +1554,7 @@ class GenericTreeItem(object):
     :class:`CustomTreeCtrl`. This is a generic implementation of :class:`TreeItem`.
     """
 
-    def __init__(self, parent, text="", ct_type=0, wnd=None, image=-1, selImage=-1, data=None, separator=False):
+    def __init__(self, parent, text="", ct_type=0, wnd=None, image=-1, selImage=-1, data=None, separator=False, on_the_right=True):
         """
         Default class constructor.
         For internal use: do not call it in your code!
@@ -1581,6 +1581,8 @@ class GenericTreeItem(object):
          same image is used for both selected and unselected items;
         :param object `data`: associate the given Python object `data` with the item;
         :param bool `separator`: ``True`` if the item is a separator, ``False`` otherwise.
+        :param bool `on_the_right`: ``True`` positions the window on the right of text, ``False``
+         on the left of text and overlapping the image.
 
         :note: Regarding radiobutton-type items (with `ct_type` = 2), the following
          approach is used:
@@ -1644,7 +1646,7 @@ class GenericTreeItem(object):
         self._ownsAttr = False      # delete attribute when done
         self._type = ct_type        # item type: 0=normal, 1=check, 2=radio
         self._is3State = False      # true for 3-state checkbox items
-        self._checked = 0           # only meaningful for check and radio items
+        self._checked = False       # only meaningful for check and radio items
         self._enabled = True        # flag to enable/disable an item
         self._hypertext = False     # indicates if the item is hypertext
         self._visited = False       # visited state for an hypertext item
@@ -1663,9 +1665,10 @@ class GenericTreeItem(object):
                 self._enabled = False
 
         self._wnd = wnd             # are we holding a window?
+        self._windowontheright = on_the_right  # on the right, or left?
 
         if wnd:
-            self.SetWindow(wnd)
+            self.SetWindow(wnd, on_the_right)
 
 
     def IsOk(self):
@@ -1695,6 +1698,10 @@ class GenericTreeItem(object):
 
         :return: A Python list containing instances of :class:`GenericTreeItem`, representing
          this item's children.
+        :note: The returned value is a reference to the list of children
+        used internally by the tree. It is advised not to change this list
+        and to make a copy before calling other tree methods as they could
+        change the contents of the list.
         """
 
         return self._children
@@ -1788,6 +1795,7 @@ class GenericTreeItem(object):
         :param integer `which`: the image kind.
 
         :see: :meth:`~GenericTreeItem.GetImage` for a description of the `which` parameter.
+        :note: Call :meth:`~CustomTreeCtrl.SetItemImage` instead to refresh the tree properly.
         """
 
         self._images[which] = image
@@ -1800,6 +1808,7 @@ class GenericTreeItem(object):
 
         :param integer `image`: an index within the left image list specifying the image to
          use for the item in the leftmost part of the client area.
+        :note: Call :meth:`~CustomTreeCtrl.SetItemLeftImage` instead to refresh the tree properly.
         """
 
         self._leftimage = image
@@ -1820,6 +1829,7 @@ class GenericTreeItem(object):
         Sets whether an item has the 'plus' button.
 
         :param bool `has`: ``True`` to set the 'plus' button on the item, ``False`` otherwise.
+        :note: Call :meth:`~CustomTreeCtrl.SetItemHasChildren` instead to refresh the tree properly.
         """
 
         self._hasPlus = has
@@ -1830,6 +1840,7 @@ class GenericTreeItem(object):
         Sets the item font bold.
 
         :parameter bool `bold`: ``True`` to have a bold font item, ``False`` otherwise.
+        :note: Call :meth:`~CustomTreeCtrl.SetItemBold` instead to refresh the tree properly.
         """
 
         self._isBold = bold
@@ -1840,6 +1851,7 @@ class GenericTreeItem(object):
         Sets the item font italic.
 
         :parameter bool `italic`: ``True`` to have an italic font item, ``False`` otherwise.
+        :note: Call :meth:`~CustomTreeCtrl.SetItemItalic` instead to refresh the tree properly.
         """
 
         self._isItalic = italic
@@ -1909,20 +1921,25 @@ class GenericTreeItem(object):
         self._width = w
 
 
-    def SetWindow(self, wnd):
+    def SetWindow(self, wnd, on_the_right=True):
         """
-        Sets the window associated to the item.
+        Sets the window associated to the item. Internal use only.
 
         :param `wnd`: a non-toplevel window to be displayed next to the item, any
          subclass of :class:`wx.Window`.
 
+        :param bool `on_the_right`: ``True`` positions the window on the right of text, ``False``
+         on the left of text and overlapping the image. New in wxPython 4.0.4.
+
         :raise: `Exception` if the input `item` is a separator and `wnd` is not ``None``.
+        :note: Always use :meth:`~CustomTreeCtrl.SetItemWindow` instead to update the tree properly.
         """
 
         if self.IsSeparator() and wnd is not None:
             raise Exception("Separator items can not have an associated window")
 
         self._wnd = wnd
+        self._windowontheright = on_the_right
 
         if wnd.GetSizer():      # the window is a complex one hold by a sizer
             size = wnd.GetBestSize()
@@ -1935,17 +1952,23 @@ class GenericTreeItem(object):
         # Do better strategies exist?
         self._wnd.Bind(wx.EVT_SET_FOCUS, self.OnSetFocus)
 
+        # We also have to bind the wx.EVT_TREE_ITEM_COLLAPSING for the
+        # associated window, for example when it is an agw.animate.AnimationCtrl,
+        # otherwise it would stay visible. See the demo for an example.
+        self._wnd.Bind(wx.EVT_TREE_ITEM_COLLAPSING, self.OnTreeItemCollapsing)
+
         self._height = size.GetHeight() + 2
         self._width = size.GetWidth()
         self._windowsize = size
 
-        # We don't show the window if the item is collapsed
-        if self._isCollapsed:
-            self._wnd.Show(False)
+        ## Hide the window since the position isn't correct yet. It will
+        ## be shown and positioned when the item is painted.
+        wnd.Show(False)
 
         # The window is enabled only if the item is enabled
         self._wnd.Enable(self._enabled)
         self._windowenabled = self._enabled
+
 
 
     def GetWindow(self):
@@ -1959,7 +1982,10 @@ class GenericTreeItem(object):
 
 
     def DeleteWindow(self):
-        """ Deletes the window associated to the item (if any). """
+        """ Deletes the window associated to the item (if any). Internal use only.
+
+        :note: Always use :meth:`~CustomTreeCtrl.DeleteItemWindow` instead to update the tree properly.
+        """
 
         if self._wnd:
             self._wnd.Destroy()
@@ -2023,6 +2049,27 @@ class GenericTreeItem(object):
         event.Skip()
 
 
+    def OnTreeItemCollapsing(self, event):
+        """
+        Handles the ``wx.EVT_TREE_ITEM_COLLAPSING`` event for the window associated with the item.
+
+        :param `event`: a :class:`GenericTreeItem` to be processed.
+        """
+        # Helio: This is not OK?
+        #        Should it be more "internal" code?
+        #        It is working on the user application.
+        for item in event.GetItem().GetChildren():
+            itemwindow = item.GetWindow()
+            if itemwindow:  # Hides the attached window if added
+                itemwindow.Hide()
+
+        # Hides the attached window if added
+        #if self._wnd:
+        #    self._wnd.Hide()
+
+        event.Skip()
+
+
     def GetType(self):
         """
         Returns the item type.
@@ -2056,6 +2103,7 @@ class GenericTreeItem(object):
            must be unchecked.
          - If a radiobutton node becomes unchecked, then all of its child nodes will become
            inactive.
+        :note: Call :meth:`~CustomTreeCtrl.SetItemType` instead to refresh the tree properly.
         """
 
         self._type = ct_type
@@ -2066,6 +2114,7 @@ class GenericTreeItem(object):
         Sets whether the item is hypertext or not.
 
         :param bool `hyper`: ``True`` to set hypertext behaviour, ``False`` otherwise.
+        :note: Call :meth:`~CustomTreeCtrl.SetItemHyperText` instead to refresh the tree properly.
         """
 
         self._hypertext = hyper
@@ -2076,6 +2125,7 @@ class GenericTreeItem(object):
         Sets whether an hypertext item was visited or not.
 
         :param bool `visited`: ``True`` to set a hypertext item as visited, ``False`` otherwise.
+        :note: Call :meth:`~CustomTreeCtrl.SetItemVisited` instead to refresh the tree properly.
         """
 
         self._visited = visited
@@ -2116,13 +2166,19 @@ class GenericTreeItem(object):
 
 
     def Expand(self):
-        """ Expands the item. """
+        """ Expands the item. Internal use only.
+
+        :note: Always use :meth:`~CustomTreeCtrl.Expand` instead to update the tree properly and send events.
+        """
 
         self._isCollapsed = False
 
 
     def Collapse(self):
-        """ Collapses the item. """
+        """ Collapses the item. Internal use only.
+
+        :note: Always use :meth:`~CustomTreeCtrl.Collapse` instead to update the tree properly and send events.
+        """
 
         self._isCollapsed = True
 
@@ -2132,6 +2188,7 @@ class GenericTreeItem(object):
         Sets the item focus/unfocus.
 
         :param bool `set`: ``True`` to set the focus to the item, ``False`` otherwise.
+        :note: Call :meth:`~CustomTreeCtrl.SelectItem` instead to update the tree properly and send events.
         """
 
         self._hasHilight = set
@@ -2229,7 +2286,7 @@ class GenericTreeItem(object):
 
         :note: This method is meaningful only for checkbox-like items.
         """
-
+        assert state in [wx.CHK_UNCHECKED, wx.CHK_CHECKED, wx.CHK_UNDETERMINED]
         if not self._is3State and state == wx.CHK_UNDETERMINED:
             raise Exception("Set3StateValue can only be used with 3-state checkbox items.")
 
@@ -2268,13 +2325,14 @@ class GenericTreeItem(object):
 
     def Check(self, checked=True):
         """
-        Checks/unchecks an item.
+        Checks/unchecks an item. Internal use only.
 
         :param bool `checked`: ``True`` to check an item, ``False`` to uncheck it.
 
         :note: This is meaningful only for checkbox-like and radiobutton-like items.
+        :note: Always use :meth:`~CustomTreeCtrl.CheckItem` instead to update the tree properly and send events.
         """
-
+        assert checked in [True, False]
         self._checked = checked
 
 
@@ -2313,6 +2371,7 @@ class GenericTreeItem(object):
         Enables/disables the item.
 
         :param bool `enable`: ``True`` to enable the item, ``False`` to disable it.
+        :note: Call :meth:`~CustomTreeCtrl.EnableItem` instead to update the tree properly.
         """
 
         self._enabled = enable
@@ -2380,9 +2439,10 @@ class GenericTreeItem(object):
 
     def DeleteChildren(self, tree):
         """
-        Deletes the item children.
+        Deletes the item children. Internal use only.
 
         :param `tree`: the main :class:`CustomTreeCtrl` instance.
+        :note: Always use :meth:`~CustomTreeCtrl.DeleteChildren` instead to update the tree properly.
         """
 
         for child in self._children:
@@ -2415,6 +2475,7 @@ class GenericTreeItem(object):
         :param string `text`: the new item label.
 
         :raise: `Exception` if the item is a separator.
+        :note: Call :meth:`~CustomTreeCtrl.SetItemText` to refresh the tree properly.
         """
 
         if self.IsSeparator():
@@ -2556,13 +2617,13 @@ class GenericTreeItem(object):
                 return self, flags
 
             # if children are expanded, fall through to evaluate them
-            if self._isCollapsed:
+            if not self.IsExpanded():
                 return None, 0
 
         # evaluate children
         for child in self._children:
             res, flags = child.HitTest(point, theCtrl, flags, level + 1)
-            if res != None:
+            if res is not None:
                 return res, flags
 
         return None, 0
@@ -2615,8 +2676,7 @@ class GenericTreeItem(object):
             return None
 
         checked = self.IsChecked()
-
-        if checked > 0:
+        if checked:
             if self._type == 1:     # Checkbox
                 if checked == wx.CHK_CHECKED:
                     return self._checkedimages[TreeItemIcon_Checked]
@@ -2802,7 +2862,7 @@ class CustomTreeCtrl(wx.ScrolledWindow):
             agwStyle &= ~TR_LINES_AT_ROOT
             agwStyle |= TR_NO_LINES
 
-            platform, major, minor = wx.GetOsVersion()
+            platform, major, minor, micro = wx.GetOsVersion()
             if major < 10:
                 agwStyle |= TR_ROW_LINES
 
@@ -2851,7 +2911,7 @@ class CustomTreeCtrl(wx.ScrolledWindow):
         self.Bind(wx.EVT_SET_FOCUS, self.OnSetFocus)
         self.Bind(wx.EVT_KILL_FOCUS, self.OnKillFocus)
         self.Bind(EVT_TREE_ITEM_GETTOOLTIP, self.OnGetToolTip)
-        self.Bind(wx.EVT_WINDOW_DESTROY, self.OnDestroy)
+        self.Bind(wx.EVT_WINDOW_DESTROY, self.OnDestroy, self)
 
         # Sets the focus to ourselves: this is useful if you have items
         # with associated widgets.
@@ -2891,6 +2951,7 @@ class CustomTreeCtrl(wx.ScrolledWindow):
         if self._findTimer and self._findTimer.IsRunning():
             self._findTimer.Stop()
             del self._findTimer
+            self._findTimer = None
 
         event.Skip()
 
@@ -3356,7 +3417,7 @@ class CustomTreeCtrl(wx.ScrolledWindow):
          ``EVT_TREE_ITEM_CHECKED`` events.
         """
 
-        if checked == None:
+        if checked is None:
             self.AutoToggleChild(item)
         else:
             self.AutoCheckChild(item, checked)
@@ -3469,7 +3530,7 @@ class CustomTreeCtrl(wx.ScrolledWindow):
         :see: The :meth:`~CustomTreeCtrl.__init__` method for the `flag` parameter description.
         """
 
-        return self._agwStyle & flag
+        return bool(self._agwStyle & flag)
 
 
     def SetAGWWindowStyleFlag(self, agwStyle):
@@ -4269,13 +4330,15 @@ class CustomTreeCtrl(wx.ScrolledWindow):
         return item.GetWindow()
 
 
-    def SetItemWindow(self, item, wnd):
+    def SetItemWindow(self, item, wnd, on_the_right=True):
         """
         Sets the window for the given item.
 
         :param `item`: an instance of :class:`GenericTreeItem`;
         :param `wnd`: if not ``None``, a non-toplevel window to be displayed next to
          the item.
+        :param bool `on_the_right`: ``True`` positions the window on the right of text, ``False``
+         on the left of text and overlapping the image. New in wxPython 4.0.4.
 
         :raise: `Exception` if the input `item` is a separator and `wnd` is not ``None``.
         """
@@ -4292,7 +4355,7 @@ class CustomTreeCtrl(wx.ScrolledWindow):
         else:
             self.DeleteItemWindow(item)
 
-        item.SetWindow(wnd)
+        item.SetWindow(wnd, on_the_right)
         self.CalculatePositions()
         self.Refresh()
         self.AdjustMyScrollbars()
@@ -4311,6 +4374,7 @@ class CustomTreeCtrl(wx.ScrolledWindow):
         item.DeleteWindow()
         if item in self._itemWithWindow:
             self._itemWithWindow.remove(item)
+        self._dirty = True
 
 
     def GetItemWindowEnabled(self, item):
@@ -4580,17 +4644,18 @@ class CustomTreeCtrl(wx.ScrolledWindow):
         :note: This method returns ``None`` if there are no further siblings.
         """
 
-        i = item
-        parent = i.GetParent()
+        parent = item.GetParent()
 
-        if parent == None:
-
+        if parent is None:
             # root item doesn't have any siblings
             return None
 
         siblings = parent.GetChildren()
-        index = siblings.index(i)
+        if item not in siblings:
+            # Item is unlinked from tree
+            return None
 
+        index = siblings.index(item)
         n = index + 1
         return (n == len(siblings) and [None] or [siblings[n]])[0]
 
@@ -4607,17 +4672,18 @@ class CustomTreeCtrl(wx.ScrolledWindow):
         :note: This method returns ``None`` if there are no further siblings.
         """
 
-        i = item
-        parent = i.GetParent()
+        parent = item.GetParent()
 
-        if parent == None:
-
+        if parent is None:
             # root item doesn't have any siblings
             return None
 
         siblings = parent.GetChildren()
-        index = siblings.index(i)
+        if item not in siblings:
+            # Item is unlinked from tree
+            return None
 
+        index = siblings.index(item)
         return (index == 0 and [None] or [siblings[index-1]])[0]
 
 
@@ -4849,7 +4915,7 @@ class CustomTreeCtrl(wx.ScrolledWindow):
 # operations
 # -----------------------------------------------------------------------------
 
-    def DoInsertItem(self, parentId, previous, text, ct_type=0, wnd=None, image=-1, selImage=-1, data=None, separator=False):
+    def DoInsertItem(self, parentId, previous, text, ct_type=0, wnd=None, image=-1, selImage=-1, data=None, separator=False, on_the_right=True):
         """
         Actually inserts an item in the tree.
 
@@ -4868,6 +4934,8 @@ class CustomTreeCtrl(wx.ScrolledWindow):
          same image is used for both selected and unselected items;
         :param object `data`: associate the given Python object `data` with the item;
         :param bool `separator`: ``True`` if the item is a separator, ``False`` otherwise.
+        :param bool `on_the_right`: ``True`` positions the window on the right of text, ``False``
+         on the left of text and overlapping the image.
 
         :return: An instance of :class:`GenericTreeItem` upon successful insertion.
 
@@ -4908,7 +4976,7 @@ class CustomTreeCtrl(wx.ScrolledWindow):
 
         self._dirty = True     # do this first so stuff below doesn't cause flicker
 
-        item = GenericTreeItem(parent, text, ct_type, wnd, image, selImage, data, separator)
+        item = GenericTreeItem(parent, text, ct_type, wnd, image, selImage, data, separator, on_the_right)
 
         if wnd is not None:
             self._hasWindows = True
@@ -4919,7 +4987,7 @@ class CustomTreeCtrl(wx.ScrolledWindow):
         return item
 
 
-    def AddRoot(self, text, ct_type=0, wnd=None, image=-1, selImage=-1, data=None):
+    def AddRoot(self, text, ct_type=0, wnd=None, image=-1, selImage=-1, data=None, on_the_right=True):
         """
         Adds a root item to the :class:`CustomTreeCtrl`.
 
@@ -4934,6 +5002,8 @@ class CustomTreeCtrl(wx.ScrolledWindow):
          use for the item in selected state; if `image` > -1 and `selImage` is -1, the
          same image is used for both selected and unselected items;
         :param object `data`: associate the given Python object `data` with the item.
+        :param bool `on_the_right`: ``True`` positions the window on the right of text, ``False``
+         on the left of text and overlapping the image.
 
         :return: An instance of :class:`GenericTreeItem` upon successful insertion.
 
@@ -4966,7 +5036,9 @@ class CustomTreeCtrl(wx.ScrolledWindow):
 
         self._dirty = True     # do this first so stuff below doesn't cause flicker
 
-        self._anchor = GenericTreeItem(None, text, ct_type, wnd, image, selImage, data)
+        self._anchor = GenericTreeItem(None, text, ct_type=ct_type, wnd=wnd,
+                                       image=image, selImage=selImage,
+                                       data=data, on_the_right=on_the_right)
 
         if wnd is not None:
             self._hasWindows = True
@@ -4988,7 +5060,7 @@ class CustomTreeCtrl(wx.ScrolledWindow):
         return self._anchor
 
 
-    def PrependItem(self, parent, text, ct_type=0, wnd=None, image=-1, selImage=-1, data=None, separator=False):
+    def PrependItem(self, parent, text, ct_type=0, wnd=None, image=-1, selImage=-1, data=None, separator=False, on_the_right=True):
         """
         Prepends an item as a first child of parent.
 
@@ -5006,16 +5078,18 @@ class CustomTreeCtrl(wx.ScrolledWindow):
          same image is used for both selected and unselected items;
         :param object `data`: associate the given Python object `data` with the item;
         :param bool `separator`: ``True`` if the item is a separator, ``False`` otherwise.
+        :param bool `on_the_right`: ``True`` positions the window on the right of text, ``False``
+         on the left of text and overlapping the image.
 
         :return: An instance of :class:`GenericTreeItem` upon successful insertion.
 
         :see: :meth:`~CustomTreeCtrl.DoInsertItem` for possible exceptions generated by this method.
         """
 
-        return self.DoInsertItem(parent, 0, text, ct_type, wnd, image, selImage, data, separator)
+        return self.DoInsertItem(parent, 0, text, ct_type, wnd, image, selImage, data, separator, on_the_right)
 
 
-    def InsertItemByItem(self, parentId, idPrevious, text, ct_type=0, wnd=None, image=-1, selImage=-1, data=None, separator=False):
+    def InsertItemByItem(self, parentId, idPrevious, text, ct_type=0, wnd=None, image=-1, selImage=-1, data=None, separator=False, on_the_right=True):
         """
         Inserts an item after the given previous.
 
@@ -5035,6 +5109,8 @@ class CustomTreeCtrl(wx.ScrolledWindow):
          same image is used for both selected and unselected items;
         :param object `data`: associate the given Python object `data` with the item;
         :param bool `separator`: ``True`` if the item is a separator, ``False`` otherwise.
+        :param bool `on_the_right`: ``True`` positions the window on the right of text, ``False``
+         on the left of text and overlapping the image.
 
         :return: An instance of :class:`GenericTreeItem` upon successful insertion.
 
@@ -5047,7 +5123,7 @@ class CustomTreeCtrl(wx.ScrolledWindow):
 
         if not parent:
             # should we give a warning here?
-            return self.AddRoot(text, ct_type, wnd, image, selImage, data)
+            return self.AddRoot(text, ct_type, wnd, image, selImage, data, on_the_right)
 
         index = -1
         if idPrevious:
@@ -5057,10 +5133,10 @@ class CustomTreeCtrl(wx.ScrolledWindow):
             except:
                 raise Exception("ERROR: Previous Item In CustomTreeCtrl.InsertItem() Is Not A Sibling")
 
-        return self.DoInsertItem(parentId, index+1, text, ct_type, wnd, image, selImage, data, separator)
+        return self.DoInsertItem(parentId, index+1, text, ct_type, wnd, image, selImage, data, separator, on_the_right)
 
 
-    def InsertItemByIndex(self, parentId, idPrevious, text, ct_type=0, wnd=None, image=-1, selImage=-1, data=None, separator=False):
+    def InsertItemByIndex(self, parentId, idPrevious, text, ct_type=0, wnd=None, image=-1, selImage=-1, data=None, separator=False, on_the_right=True):
         """
         Inserts an item after the given previous.
 
@@ -5079,6 +5155,8 @@ class CustomTreeCtrl(wx.ScrolledWindow):
          same image is used for both selected and unselected items;
         :param object `data`: associate the given Python object `data` with the item;
         :param bool `separator`: ``True`` if the item is a separator, ``False`` otherwise.
+        :param bool `on_the_right`: ``True`` positions the window on the right of text, ``False``
+         on the left of text and overlapping the image.
 
         :return: An instance of :class:`GenericTreeItem` upon successful insertion.
 
@@ -5091,10 +5169,10 @@ class CustomTreeCtrl(wx.ScrolledWindow):
             # should we give a warning here?
             return self.AddRoot(text, ct_type, wnd, image, selImage, data)
 
-        return self.DoInsertItem(parentId, idPrevious, text, ct_type, wnd, image, selImage, data, separator)
+        return self.DoInsertItem(parentId, idPrevious, text, ct_type, wnd, image, selImage, data, separator, on_the_right)
 
 
-    def InsertItem(self, parentId, input, text, ct_type=0, wnd=None, image=-1, selImage=-1, data=None, separator=False):
+    def InsertItem(self, parentId, input, text, ct_type=0, wnd=None, image=-1, selImage=-1, data=None, separator=False, on_the_right=True):
         """
         Inserts an item after the given previous.
 
@@ -5107,12 +5185,12 @@ class CustomTreeCtrl(wx.ScrolledWindow):
         """
 
         if type(input) == type(1):
-            return self.InsertItemByIndex(parentId, input, text, ct_type, wnd, image, selImage, data, separator)
+            return self.InsertItemByIndex(parentId, input, text, ct_type, wnd, image, selImage, data, separator, on_the_right)
         else:
-            return self.InsertItemByItem(parentId, input, text, ct_type, wnd, image, selImage, data, separator)
+            return self.InsertItemByItem(parentId, input, text, ct_type, wnd, image, selImage, data, separator, on_the_right)
 
 
-    def AppendItem(self, parentId, text, ct_type=0, wnd=None, image=-1, selImage=-1, data=None):
+    def AppendItem(self, parentId, text, ct_type=0, wnd=None, image=-1, selImage=-1, data=None, on_the_right=True):
         """
         Appends an item as a last child of its parent.
 
@@ -5129,6 +5207,8 @@ class CustomTreeCtrl(wx.ScrolledWindow):
          use for the item in selected state; if `image` > -1 and `selImage` is -1, the
          same image is used for both selected and unselected items;
         :param object `data`: associate the given Python object `data` with the item.
+        :param bool `on_the_right`: ``True`` positions the window on the right of text, ``False``
+         on the left of text and overlapping the image.
 
         :return: An instance of :class:`GenericTreeItem` upon successful insertion.
 
@@ -5139,9 +5219,9 @@ class CustomTreeCtrl(wx.ScrolledWindow):
 
         if not parent:
             # should we give a warning here?
-            return self.AddRoot(text, ct_type, wnd, image, selImage, data)
+            return self.AddRoot(text, ct_type, wnd, image, selImage, data, on_the_right)
 
-        return self.DoInsertItem(parent, len(parent.GetChildren()), text, ct_type, wnd, image, selImage, data)
+        return self.DoInsertItem(parent, len(parent.GetChildren()), text, ct_type, wnd, image, selImage, data, False, on_the_right)
 
 
     def AppendSeparator(self, parentId):
@@ -5234,7 +5314,7 @@ class CustomTreeCtrl(wx.ScrolledWindow):
         :param `item`: an instance of :class:`GenericTreeItem`.
         """
 
-        if self._editCtrl != None and item != self._editCtrl.item() and self.IsDescendantOf(item, self._editCtrl.item()):
+        if self._editCtrl is not None and item != self._editCtrl.item() and self.IsDescendantOf(item, self._editCtrl.item()):
             self._editCtrl.StopEditing()
 
         if item != self._key_current and self.IsDescendantOf(item, self._key_current):
@@ -5273,7 +5353,7 @@ class CustomTreeCtrl(wx.ScrolledWindow):
 
         self._dirty = True     # do this first so stuff below doesn't cause flicker
 
-        if self._editCtrl != None and self.IsDescendantOf(item, self._editCtrl.item()):
+        if self._editCtrl is not None and self.IsDescendantOf(item, self._editCtrl.item()):
             # can't delete the item being edited, cancel editing it first
             self._editCtrl.StopEditing()
 
@@ -5597,7 +5677,7 @@ class CustomTreeCtrl(wx.ScrolledWindow):
 
         parent = crt_item.GetParent()
 
-        if parent == None: # This is root item
+        if parent is None: # This is root item
             return self.TagAllChildrenUntilLast(crt_item, last_item, select)
 
         children = parent.GetChildren()
@@ -5759,6 +5839,8 @@ class CustomTreeCtrl(wx.ScrolledWindow):
 
         :param `item`: an instance of :class:`GenericTreeItem`;
         :param bool `select`: ``True`` to select an item, ``False`` to deselect it.
+
+        :note: If TR_MULTIPLE is set, this actually toggles selection when select=True.
         """
 
         if select:
@@ -5873,31 +5955,26 @@ class CustomTreeCtrl(wx.ScrolledWindow):
         item_y = item.GetY()
         start_x, start_y = self.GetViewStart()
         start_y *= _PIXELS_PER_UNIT
-
         client_w, client_h = self.GetClientSize()
 
-        x, y = 0, 0
+        # Calculate size of entire tree (not necessary anymore?)
+        x, y = self._anchor.GetSize(0, 0, self)
+        y += _PIXELS_PER_UNIT + 2 # one more scrollbar unit + 2 pixels
+        x += _PIXELS_PER_UNIT + 2 # one more scrollbar unit + 2 pixels
+        x_pos = self.GetScrollPos(wx.HORIZONTAL)
 
+        ## Note: The Scroll() method updates all child window positions
+        ##       while the SetScrollBars() does not (on most platforms).
         if item_y < start_y+3:
-
-            # going down
-            x, y = self._anchor.GetSize(x, y, self)
-            y += _PIXELS_PER_UNIT + 2 # one more scrollbar unit + 2 pixels
-            x += _PIXELS_PER_UNIT + 2 # one more scrollbar unit + 2 pixels
-            x_pos = self.GetScrollPos(wx.HORIZONTAL)
-            # Item should appear at top
-            self.SetScrollbars(_PIXELS_PER_UNIT, _PIXELS_PER_UNIT, x//_PIXELS_PER_UNIT, y//_PIXELS_PER_UNIT, x_pos, item_y//_PIXELS_PER_UNIT)
+            # going down, item should appear at top
+            self.Scroll(x_pos, item_y // _PIXELS_PER_UNIT)
+            #self.SetScrollbars(_PIXELS_PER_UNIT, _PIXELS_PER_UNIT, x//_PIXELS_PER_UNIT, y//_PIXELS_PER_UNIT, x_pos, item_y//_PIXELS_PER_UNIT)
 
         elif item_y+self.GetLineHeight(item) > start_y+client_h:
-
-            # going up
-            x, y = self._anchor.GetSize(x, y, self)
-            y += _PIXELS_PER_UNIT + 2 # one more scrollbar unit + 2 pixels
-            x += _PIXELS_PER_UNIT + 2 # one more scrollbar unit + 2 pixels
+            # going up, item should appear at bottom
             item_y += _PIXELS_PER_UNIT+2
-            x_pos = self.GetScrollPos(wx.HORIZONTAL)
-            # Item should appear at bottom
-            self.SetScrollbars(_PIXELS_PER_UNIT, _PIXELS_PER_UNIT, x//_PIXELS_PER_UNIT, y//_PIXELS_PER_UNIT, x_pos, (item_y+self.GetLineHeight(item)-client_h)//_PIXELS_PER_UNIT )
+            self.Scroll(x_pos, (item_y + self.GetLineHeight(item) - client_h) // _PIXELS_PER_UNIT)
+            #self.SetScrollbars(_PIXELS_PER_UNIT, _PIXELS_PER_UNIT, x//_PIXELS_PER_UNIT, y//_PIXELS_PER_UNIT, x_pos, (item_y+self.GetLineHeight(item)-client_h)//_PIXELS_PER_UNIT )
 
 
     def OnCompareItems(self, item1, item2):
@@ -5917,7 +5994,9 @@ class CustomTreeCtrl(wx.ScrolledWindow):
         :note: The base class version compares items alphabetically.
         """
 
-        return cmp(self.GetItemText(item1), self.GetItemText(item2))
+        a = self.GetItemText(item1)
+        b = self.GetItemText(item2)
+        return (a > b) - (a < b)  # equivalent to old cmp function
 
 
     def SortChildren(self, item):
@@ -6720,8 +6799,12 @@ class CustomTreeCtrl(wx.ScrolledWindow):
             dc.DrawLabel(itemText, textrect)
 
         wnd = item.GetWindow()
+        on_right = item._windowontheright  # Helio: Should I make a getter?
         if wnd:
-            wndx = wcheck + image_w + item.GetX() + text_w + 4
+            if on_right:  # Helio: Original behaviour
+                wndx = wcheck + image_w + item.GetX() + text_w + 4
+            else:
+                wndx = wcheck + item.GetX()
             xa, ya = self.CalcScrolledPosition((0, item.GetY()))
             wndx += xa
             if item.GetHeight() > item.GetWindowSize()[1]:
@@ -6736,10 +6819,11 @@ class CustomTreeCtrl(wx.ScrolledWindow):
                 # Rightmost alignment of windows
                 wndx = w - item.GetWindowSize().x - 2 + xa
 
+            if wnd.GetPosition() != (wndx, ya):
+                wnd.Move(wndx, ya, flags=wx.SIZE_ALLOW_MINUS_ONE)
+            # Force window visible after any position changes were made.
             if not wnd.IsShown():
                 wnd.Show()
-            if wnd.GetPosition() != (wndx, ya):
-                wnd.SetPosition((wndx, ya))
 
         if separator:
             oldPen = dc.GetPen()
@@ -7159,20 +7243,20 @@ class CustomTreeCtrl(wx.ScrolledWindow):
 
         keyCode = event.GetKeyCode()
 
-        if keyCode in [ord("+"), wx.WXK_ADD]:       # "+"
+        if keyCode in (ord('+'), wx.WXK_ADD, wx.WXK_NUMPAD_ADD):				# "+"
             if self._current.HasPlus() and not self.IsExpanded(self._current) and self.IsItemEnabled(self._current):
                 self.Expand(self._current)
 
-        elif keyCode in [ord("*"), wx.WXK_MULTIPLY]:  # "*"
+        elif keyCode in (ord('*'), wx.WXK_MULTIPLY, wx.WXK_NUMPAD_MULTIPLY):	# "*"
             if not self.IsExpanded(self._current) and self.IsItemEnabled(self._current):
                 # expand all
-                self.ExpandAll(self._current)
+                self.ExpandAllChildren(self._current)
 
-        elif keyCode in [ord("-"), wx.WXK_SUBTRACT]:  # "-"
+        elif keyCode in (ord('-'), wx.WXK_SUBTRACT, wx.WXK_NUMPAD_SUBTRACT):	# "-"
             if self.IsExpanded(self._current):
                 self.Collapse(self._current)
 
-        elif keyCode == wx.WXK_MENU:
+        elif keyCode in (wx.WXK_MENU, wx.WXK_WINDOWS_MENU):
             # Use the item's bounding rectangle to determine position for the event
             itemRect = self.GetBoundingRect(self._current, True)
             event = TreeEvent(wxEVT_TREE_ITEM_MENU, self.GetId())
@@ -7182,7 +7266,7 @@ class CustomTreeCtrl(wx.ScrolledWindow):
             event.SetEventObject(self)
             self.GetEventHandler().ProcessEvent(event)
 
-        elif keyCode in [wx.WXK_RETURN, wx.WXK_SPACE, wx.WXK_NUMPAD_ENTER]:
+        elif keyCode in (wx.WXK_RETURN, wx.WXK_SPACE, wx.WXK_NUMPAD_ENTER):
 
             if not self.IsItemEnabled(self._current):
                 event.Skip()
@@ -7216,43 +7300,15 @@ class CustomTreeCtrl(wx.ScrolledWindow):
         # up goes to the previous sibling or to the last
         # of its children if it's expanded
         elif keyCode == wx.WXK_UP:
-            prev = self.GetPrevSibling(self._key_current)
-            if not prev:
-                prev = self.GetItemParent(self._key_current)
-                if prev == self.GetRootItem() and self.HasAGWFlag(TR_HIDE_ROOT):
-                    return
+            # Search for a previous, enabled item.
+            prev = self.GetPrevShown(self._key_current)
+            while prev and self.IsItemEnabled(prev) is False:
+                prev = self.GetPrevShown(prev)
 
-                if prev:
-                    current = self._key_current
-                    # TODO: Huh?  If we get here, we'd better be the first child of our parent.  How else could it be?
-                    if current == self.GetFirstChild(prev)[0] and self.IsItemEnabled(prev):
-                        # otherwise we return to where we came from
-                        self.DoSelectItem(prev, unselect_others, extended_select, from_key=True)
-                        self._key_current = prev
-
-            else:
-                current = self._key_current
-
-                # We are going to another parent node
-                while self.IsExpanded(prev) and self.HasChildren(prev):
-                    child = self.GetLastChild(prev)
-                    if child:
-                        prev = child
-                        current = prev
-
-                # Try to get the previous siblings and see if they are active
-                while prev and not self.IsItemEnabled(prev):
-                    prev = self.GetPrevSibling(prev)
-
-                if not prev:
-                    # No previous siblings active: go to the parent and up
-                    prev = self.GetItemParent(current)
-                    while prev and not self.IsItemEnabled(prev):
-                        prev = self.GetItemParent(prev)
-
-                if prev:
-                    self.DoSelectItem(prev, unselect_others, extended_select, from_key=True)
-                    self._key_current = prev
+            # If we found a valid enabled item, select it.
+            if prev:
+                self.DoSelectItem(prev, unselect_others, extended_select, from_key=True)
+                self._key_current = prev
 
         # left arrow goes to the parent
         elif keyCode == wx.WXK_LEFT:
@@ -7281,73 +7337,147 @@ class CustomTreeCtrl(wx.ScrolledWindow):
             # fall through
 
         elif keyCode == wx.WXK_DOWN:
-            if self.IsExpanded(self._key_current) and self.HasChildren(self._key_current):
 
-                child = self.GetNextActiveItem(self._key_current)
+            # Scan for next enabled item.
+            next = self.GetNextShown(self._key_current)
+            while next and self.IsItemEnabled(next) is False:
+                next = self.GetNextShown(next)
 
-                if child:
-                    self.DoSelectItem(child, unselect_others, extended_select, from_key=True)
-                    self._key_current = child
+            if next:
+                self.DoSelectItem(next, unselect_others, extended_select, from_key=True)
+                self._key_current = next
 
-            else:
-
-                next = self.GetNextSibling(self._key_current)
-
-                if not next:
-                    current = self._key_current
-                    while current and not next:
-                        current = self.GetItemParent(current)
-                        if current:
-                            next = self.GetNextSibling(current)
-                            if not next or not self.IsItemEnabled(next):
-                                next = None
-
-                else:
-                    while next and not self.IsItemEnabled(next):
-                        next = self.GetNext(next)
-
-                if next:
-                    self.DoSelectItem(next, unselect_others, extended_select, from_key=True)
-                    self._key_current = next
-
-
-        # <End> selects the last visible tree item
+        # <End> selects the last enabled tree item.
         elif keyCode == wx.WXK_END:
 
-            last = self.GetRootItem()
+            top = self.GetRootItem()
+            if self.HasAGWFlag(TR_HIDE_ROOT):
+                top, cookie = self.GetFirstChild(top)
 
-            while last and self.IsExpanded(last):
+            lastEnabled = None
+            while top:
+                # Keep track of last enabled item encountered.
+                if self.IsItemEnabled(top):
+                    lastEnabled = top
+                # Top-most item is not enabled. Scan for next item.
+                top = self.GetNextShown(top)
 
-                lastChild = self.GetLastChild(last)
+            if lastEnabled:
+                self.DoSelectItem(lastEnabled, unselect_others, extended_select, from_key=True)
 
-                # it may happen if the item was expanded but then all of
-                # its children have been deleted - so IsExpanded() returned
-                # true, but GetLastChild() returned invalid item
-                if not lastChild:
-                    break
-
-                last = lastChild
-
-            if last and self.IsItemEnabled(last):
-
-                self.DoSelectItem(last, unselect_others, extended_select, from_key=True)
-
-        # <Home> selects the root item
+        # <Home> selects the first enabled tree item.
         elif keyCode == wx.WXK_HOME:
 
-            prev = self.GetRootItem()
-
-            if not prev:
-                return
-
+            top = self.GetRootItem()
             if self.HasAGWFlag(TR_HIDE_ROOT):
-                prev, cookie = self.GetFirstChild(prev)
-                if not prev:
-                    return
+                top, cookie = self.GetFirstChild(top)
 
-            if self.IsItemEnabled(prev):
-                self.DoSelectItem(prev, unselect_others, extended_select, from_key=True)
+            # Scan for first enabled and displayed item.
+            while top and self.IsItemEnabled(top) is False:
+                top = self.GetNextShown(top)
 
+            if top:
+                self.DoSelectItem(top, unselect_others, extended_select, from_key=True)
+
+        # <PgUp> moves up by a page
+        elif keyCode in (wx.WXK_PAGEUP, wx.WXK_NUMPAD_PAGEUP):
+            # Get Current tree Item.
+            currentItem = self.GetSelection()
+            if not currentItem:
+                # Nothing selected. Allow normal ScrolledWindow PageUp handling.
+                event.Skip()
+                return
+            # Is the current item visible?
+            clientWidth, clientHeight = self.GetClientSize()
+            itemHeight = currentItem.GetHeight()
+            pageSize = max(int(clientHeight * 0.9), clientHeight - itemHeight)
+            x, y = self.CalcScrolledPosition(0, currentItem.GetY())
+            if y >= 0 and (y + itemHeight) < clientHeight:
+                visCount = 1    # Current item is visible
+            else:
+                visCount = 0    # Current item not visible.
+            # Move upwards in tree until last visible, or pagesize hit.
+            amount = 0
+            targetItem = currentItem
+            prevItem = self.GetPrevShown(currentItem)
+            while prevItem:
+                itemHeight = prevItem.GetHeight()
+                if visCount:
+                    # Is this item also visible?
+                    x, y = self.CalcScrolledPosition(0, prevItem.GetY())
+                    if y >= 0 and (y + itemHeight) < clientHeight:
+                        visCount += 1
+                    else:
+                        if visCount > 1 and targetItem != currentItem:
+                            # Move to top visible item in page.
+                            break
+                        visCount = 0
+                # Move up to previous item, set as target if it is enabled.
+                if prevItem.IsEnabled():
+                    targetItem = prevItem
+                amount += itemHeight
+                # Break loop if we moved up a page size and have a new target.
+                if amount > pageSize and targetItem != currentItem:
+                    break
+                prevItem = self.GetPrevShown(prevItem)
+            # If we found a valid target, select it.
+            if targetItem != currentItem:
+                self.DoSelectItem(targetItem, unselect_others=True,
+                                  extended_select=False, from_key=True)
+            else:
+                # No enabled item found. Let ScrolledWindow handle PageUp.
+                event.Skip()
+
+        # <PgDn> moves down by a page
+        elif keyCode in (wx.WXK_PAGEDOWN, wx.WXK_NUMPAD_PAGEDOWN):
+            # Get Current tree Item.
+            currentItem = self.GetSelection()
+            if not currentItem:
+                # Nothing selected. Allow normal ScrolledWindow PgDn handling.
+                event.Skip()
+                return
+            # Is the current item visible?
+            clientWidth, clientHeight = self.GetClientSize()
+            itemHeight = currentItem.GetHeight()
+            pageSize = max(int(clientHeight * 0.9), clientHeight - itemHeight)
+            x, y = self.CalcScrolledPosition(0, currentItem.GetY())
+            if y >= 0 and (y + itemHeight) < clientHeight:
+                visCount = 1    # Current item is visible
+            else:
+                visCount = 0    # Current item not visible.
+            # Move downwards in tree until last visible, or pagesize hit.
+            amount = 0
+            targetItem = currentItem
+            nextItem = self.GetNextShown(currentItem)
+            while nextItem:
+                itemHeight = nextItem.GetHeight()
+                if visCount:
+                    # Is this item also visible?
+                    x, y = self.CalcScrolledPosition(0, nextItem.GetY())
+                    if y >= 0 and (y + itemHeight) < clientHeight:
+                        visCount += 1
+                    else:
+                        if visCount > 1 and targetItem != currentItem:
+                            # Move to last visible item in page.
+                            break
+                        visCount = 0
+                # Move down to next item, set as target if it is enabled.
+                if nextItem.IsEnabled():
+                    targetItem = nextItem
+                amount += itemHeight
+                # Break loop if we moved down a page size and have a new target.
+                if amount > pageSize and targetItem != currentItem:
+                    break
+                nextItem = self.GetNextShown(nextItem)
+            # If we found a valid target, select it.
+            if targetItem != currentItem:
+                self.DoSelectItem(targetItem, unselect_others=True,
+                                  extended_select=False, from_key=True)
+            else:
+                # No enabled item found. Let ScrolledWindow handle PageDown.
+                event.Skip()
+
+        # Some other key pressed. Consume character for item search.
         else:
 
             if not event.HasModifiers() and ((keyCode >= ord('0') and keyCode <= ord('9')) or \
@@ -7377,6 +7507,62 @@ class CustomTreeCtrl(wx.ScrolledWindow):
             else:
 
                 event.Skip()
+
+
+    def GetPrevShown(self, item):
+        """
+        Returns the previous displayed item in the tree. This is either the
+        last displayed child of its previous sibling, or its parent item.
+
+        :param `item`: an instance of :class:`GenericTreeItem`;
+
+        :return: An instance of :class:`GenericTreeItem` or ``None`` if no previous item found (root).
+        """
+        if not item:
+            return None
+        # Try to get previous sibling.
+        prev = self.GetPrevSibling(item)
+        if prev:
+            # Drill down to last displayed child of previous sibling.
+            while self.IsExpanded(prev) and self.HasChildren(prev):
+                prev = self.GetLastChild(prev)
+        else:
+            # No previous sibling. Move to parent.
+            prev = self.GetItemParent(item)
+        # Suppress returning root item if TR_HIDE_ROOT flag is set.
+        if prev == self.GetRootItem() and self.HasAGWFlag(TR_HIDE_ROOT):
+            return None
+        return prev
+
+
+    def GetNextShown(self, item):
+        """
+        Returns the next displayed item in the tree. This is either the first
+        child of the item (if it is expanded and has children) or its next
+        sibling. If there is no next sibling the tree is walked backwards
+        until a next sibling for one of its parents is found.
+
+        :param `item`: an instance of :class:`GenericTreeItem`;
+
+        :return: An instance of :class:`GenericTreeItem` or ``None`` if no item follows this one.
+        """
+        if not item:
+            return None
+        # Is the item expanded and has children?
+        if self.IsExpanded(item) and self.HasChildren(item):
+            # Next item = first child.
+            next, cookie = self.GetFirstChild(item)
+        else:
+            # Next item = next sibling.
+            sibling = self.GetNextSibling(item)
+            parent = self.GetItemParent(item)
+            while not sibling and parent and parent != self.GetRootItem():
+                # No sibling. Try parent's sibling until root reached.
+                sibling = self.GetNextSibling(parent)
+                parent = self.GetItemParent(parent)
+            next = sibling
+        # Return the next item.
+        return next
 
 
     def GetNextActiveItem(self, item, down=True):
@@ -7469,14 +7655,14 @@ class CustomTreeCtrl(wx.ScrolledWindow):
         if flags:
             return None, flags
 
-        if self._anchor == None:
+        if self._anchor is None:
             flags = TREE_HITTEST_NOWHERE
             return None, flags
 
         point = self.CalcUnscrolledPosition(*point)
         hit, flags = self._anchor.HitTest(point, self, flags, 0)
 
-        if hit == None:
+        if hit is None:
             flags = TREE_HITTEST_NOWHERE
             return None, flags
 
@@ -7543,11 +7729,12 @@ class CustomTreeCtrl(wx.ScrolledWindow):
             else:
                 wx.YieldIfNeeded()
 
-        if self._editCtrl != None and item != self._editCtrl.item():
+        if self._editCtrl is not None and item != self._editCtrl.item():
             self._editCtrl.StopEditing()
 
-        self._editCtrl = TreeTextCtrl(self, item=item)
-        self._editCtrl.SetFocus()
+        if self._editCtrl is None:
+            self._editCtrl = TreeTextCtrl(self, item=item)
+            self._editCtrl.SetFocus()
 
 
     def GetEditControl(self):
@@ -7823,14 +8010,14 @@ class CustomTreeCtrl(wx.ScrolledWindow):
 
             self._dragCount = 0
 
-            if item == None:
-                if self._editCtrl != None and item != self._editCtrl.item():
+            if item is None:
+                if self._editCtrl is not None and item != self._editCtrl.item():
                     self._editCtrl.StopEditing()
                 return  # we hit the blank area
 
             if event.RightDown():
 
-                if self._editCtrl != None and item != self._editCtrl.item():
+                if self._editCtrl is not None and item != self._editCtrl.item():
                     self._editCtrl.StopEditing()
 
                 self._hasFocus = True
@@ -7890,11 +8077,11 @@ class CustomTreeCtrl(wx.ScrolledWindow):
             else: # !RightDown() && !LeftUp() ==> LeftDown() || LeftDClick()
 
                 if not item or not item.IsEnabled():
-                    if self._editCtrl != None and item != self._editCtrl.item():
+                    if self._editCtrl is not None and item != self._editCtrl.item():
                         self._editCtrl.StopEditing()
                     return
 
-                if self._editCtrl != None and item != self._editCtrl.item():
+                if self._editCtrl is not None and item != self._editCtrl.item():
                     self._editCtrl.StopEditing()
 
                 self._hasFocus = True
@@ -8149,7 +8336,20 @@ class CustomTreeCtrl(wx.ScrolledWindow):
         # set its position
         item.SetX(x+self._spacing)
         item.SetY(y)
-        y += self.GetLineHeight(item)
+        height = self.GetLineHeight(item)
+
+        wnd = item.GetWindow()
+        if wnd:
+            # move its window, if necessary.
+            xa, ya = self.CalcScrolledPosition((0, y))
+            wndWidth, wndHeight = item.GetWindowSize()
+            if height > wndHeight:
+                ya += (height - wndHeight) // 2
+            wndx, wndy = wnd.GetPosition()
+            if wndy != ya:
+                wnd.Move(wndx, ya, flags=wx.SIZE_ALLOW_MINUS_ONE)
+
+        y += height
 
         if not item.IsExpanded():
             # we don't need to calculate collapsed branches
@@ -8562,7 +8762,7 @@ if __name__ == '__main__':
     # our normal wxApp-derived class, as usual
 
     app = wx.App(0)
-
+    locale = wx.Locale(wx.LANGUAGE_DEFAULT)
     frame = MyFrame(None)
     app.SetTopWindow(frame)
     frame.Show()
